@@ -1,0 +1,18 @@
+[project]
+name = "overmind"
+version = "0.1.0"
+description = "Proactive thought injection for Claude Code sessions"
+requires-python = ">=3.10"
+dependencies = [
+    "graphiti-core[kuzu]>=0.28",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

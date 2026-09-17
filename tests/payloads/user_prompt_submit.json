@@ -1,0 +1,1 @@
+{"session_id": "ovm-test-stop-0001", "transcript_path": "/Users/x/.claude/projects/p/s.jsonl", "cwd": "/Users/x/Projects/demo", "permission_mode": "default", "hook_event_name": "UserPromptSubmit", "prompt": "Forget the migration for now. Set up the deploy pipeline for the marketing site instead."}

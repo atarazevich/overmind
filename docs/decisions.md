@@ -5,3 +5,6 @@ Jev (TypeSafe System One) as the per-event judge instead of an LLM. Context: the
 
 ## 2026-09-17 — Observe first
 Phases fixed as observe → label → inject. No action of any kind before the calibration curve exists.
+
+## 2026-09-17 — Hook process shape
+`os.fork` + `setsid` with stdio on `/dev/null`, not `subprocess.Popen` of a second interpreter: `import subprocess` costs 4–5 ms and a second interpreter start ~20 ms, against a 50 ms synchronous budget. `urllib.request` (23–25 ms) is imported only in the child. The wiring and the shebang name `/usr/bin/python3` (system 3.9.6, the agent-notch pattern) because the bare `python3` on PATH is a pyenv shim that adds ~110 ms. Context: measured with `-X importtime` and `perf_counter` around the hook process on 2026-09-17.

@@ -7,7 +7,7 @@ Questions, first set (all Noul):
 - Stop: needs_owner (asks for a decision or answer before continuing) · claims_done · drifting (work not asked for) · stuck (repeating a failing attempt)
 - UserPromptSubmit: sharp_turn (new direction vs. the current thread)
 - PreToolUse Bash: risky (destructive or irreversible; complements cc-safety-net which blocks known patterns)
-- SubagentStop: claims_more_than_shown (summary asserts work the transcript's tool calls don't show)
+- SubagentStop: claims_done · needs_parent_decision. (claims_more_than_shown — summary asserts work the transcript's tool calls don't show — needs the subagent transcript; v1 builds state from the payload alone, so it is deferred. Lines carry `state_source: payload` to mark this.)
 
 ## Phase 2 — See and label
 Dashboard: now (live sessions, latest signals), timeline (signals per session over time), history (distributions; calibration curve once labels exist). One-key label on every fired signal. Done when the owner has labeled 200 signals and the reliability curve per question is on the page.

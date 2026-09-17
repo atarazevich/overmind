@@ -1,0 +1,109 @@
+[
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "ToolSearch",
+    "tool_input": {
+      "query": "select:WebFetch",
+      "max_results": 1
+    },
+    "tool_use_id": "toolu_01X1iARMv3JPM4fzvtAyZi7C"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "gh repo view letta-ai/claude-subconscious",
+      "description": "Get repo overview via gh CLI"
+    },
+    "tool_use_id": "toolu_01VB1goWQaSkoVS7DXk2xJp7"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Read",
+    "tool_input": {
+      "file_path": "/Users/drtarazevich/Projects/overmind/README.md"
+    },
+    "tool_use_id": "toolu_01V7qenH7w1Qpqa5dtBLVtrZ"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "ls /Users/drtarazevich/Projects/overmind",
+      "description": "List overmind project root"
+    },
+    "tool_use_id": "toolu_01LMp5SP3bpwm85WsX8jqcLK"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "ls /Users/drtarazevich/Projects/overmind/overmind",
+      "description": "List overmind module files"
+    },
+    "tool_use_id": "toolu_017dvDaYFGwjfjtkPaFBvvj5"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Grep",
+    "tool_input": {
+      "pattern": "inject|notif|Monitor|stdout|emit|hook|SessionStart|UserPromptSubmit|PreToolUse",
+      "path": "/Users/drtarazevich/Projects/overmind/overmind",
+      "output_mode": "content",
+      "-n": true,
+      "head_limit": 60
+    },
+    "tool_use_id": "toolu_019VobJq1mviDXhY9vnq5BHs"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Read",
+    "tool_input": {
+      "file_path": "/Users/drtarazevich/Projects/overmind/overmind/watch.py",
+      "offset": 230,
+      "limit": 30
+    },
+    "tool_use_id": "toolu_01Eyy7BgXjCRMg3RE572QPPE"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "cat ~/.claude/skills/overmind/SKILL.md 2>/dev/null | head -80",
+      "description": "Show the overmind skill definition"
+    },
+    "tool_use_id": "toolu_01VCvcUzXheNHQgNNceyVWdy"
+  }
+]

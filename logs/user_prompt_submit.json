@@ -1,0 +1,18 @@
+[
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "check this out and compare to what we have here\n\nhttps://github.com/letta-ai/claude-subconscious"
+  },
+  {
+    "session_id": "39731301-f462-4b3a-b710-e125b9615279",
+    "transcript_path": "/Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/39731301-f462-4b3a-b710-e125b9615279.jsonl",
+    "cwd": "/Users/drtarazevich/Projects/overmind",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "how does it injects vs how we do it"
+  }
+]

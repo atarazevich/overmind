@@ -1,0 +1,7 @@
+[20:50:43] Log opened: /Users/drtarazevich/Projects/overmind/logs/b0f69ea5-94be-441d-9ec3-8c016df4c6da.log
+[20:50:44] Graphiti init failed: IO exception: Could not set lock on file : /Users/drtarazevich/Projects/overmind/data/c7b5125b/kuzu
+See the docs: https://docs.kuzudb.com/concurrency for more information.
+[20:50:44] Overmind watching: /Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/b0f69ea5-94be-441d-9ec3-8c016df4c6da.jsonl
+[20:50:44] +2 turns, buffer=2, offset=7432
+[20:53:42] received signal 15, shutting down
+[20:53:42] Overmind stopped.

@@ -1,0 +1,75 @@
+[20:44:52] Log opened: /Users/drtarazevich/Projects/overmind/logs/db0aea58-bab3-48e1-84b1-438385b3f432.log
+[20:44:53] Graphiti init failed: IO exception: Could not set lock on file : /Users/drtarazevich/Projects/overmind/data/c7b5125b/kuzu
+See the docs: https://docs.kuzudb.com/concurrency for more information.
+[20:44:53] Overmind watching: /Users/drtarazevich/.claude/projects/-Users-drtarazevich-Projects-overmind/db0aea58-bab3-48e1-84b1-438385b3f432.jsonl
+[20:44:53] +8 turns, buffer=8, offset=63012
+[20:44:53] evaluating 8 buffered turns
+[20:45:01] +2 turns, buffer=5, offset=73419
+[20:45:11] evaluating 3 buffered turns
+[20:45:19] evaluating 3 buffered turns
+[20:45:27] evaluating 3 buffered turns
+[20:45:35] evaluating 3 buffered turns
+[20:45:43] evaluating 3 buffered turns
+[20:45:51] evaluating 3 buffered turns
+[20:45:59] evaluating 3 buffered turns
+[20:46:08] evaluating 3 buffered turns
+[20:46:18] evaluating 3 buffered turns
+[20:46:27] evaluating 3 buffered turns
+[20:46:33] evaluating 3 buffered turns
+[20:46:39] evaluating 3 buffered turns
+[20:46:47] evaluating 3 buffered turns
+[20:46:54] evaluating 3 buffered turns
+[20:47:01] evaluating 3 buffered turns
+[20:47:09] evaluating 3 buffered turns
+[20:47:18] evaluating 3 buffered turns
+[20:47:25] evaluating 3 buffered turns
+[20:47:33] evaluating 3 buffered turns
+[20:47:40] evaluating 3 buffered turns
+[20:47:47] evaluating 3 buffered turns
+[20:47:53] evaluating 3 buffered turns
+[20:48:02] evaluating 3 buffered turns
+[20:48:10] evaluating 3 buffered turns
+[20:48:20] evaluating 3 buffered turns
+[20:48:28] evaluating 3 buffered turns
+[20:48:35] evaluating 3 buffered turns
+[20:48:45] evaluating 3 buffered turns
+[20:48:53] evaluating 3 buffered turns
+[20:49:01] evaluating 3 buffered turns
+[20:49:09] evaluating 3 buffered turns
+[20:49:17] evaluating 3 buffered turns
+[20:49:24] evaluating 3 buffered turns
+[20:49:31] evaluating 3 buffered turns
+[20:49:39] evaluating 3 buffered turns
+[20:49:46] evaluating 3 buffered turns
+[20:49:54] evaluating 3 buffered turns
+[20:50:02] evaluating 3 buffered turns
+[20:50:09] evaluating 3 buffered turns
+[20:50:15] evaluating 3 buffered turns
+[20:50:22] evaluating 3 buffered turns
+[20:50:30] evaluating 3 buffered turns
+[20:50:40] evaluating 3 buffered turns
+[20:50:47] evaluating 3 buffered turns
+[20:50:56] evaluating 3 buffered turns
+[20:51:05] evaluating 3 buffered turns
+[20:51:12] evaluating 3 buffered turns
+[20:51:19] evaluating 3 buffered turns
+[20:51:27] evaluating 3 buffered turns
+[20:51:36] evaluating 3 buffered turns
+[20:51:44] evaluating 3 buffered turns
+[20:51:49] evaluating 3 buffered turns
+[20:51:58] evaluating 3 buffered turns
+[20:52:04] evaluating 3 buffered turns
+[20:52:13] evaluating 3 buffered turns
+[20:52:21] evaluating 3 buffered turns
+[20:52:27] evaluating 3 buffered turns
+[20:52:34] evaluating 3 buffered turns
+[20:52:41] evaluating 3 buffered turns
+[20:52:48] evaluating 3 buffered turns
+[20:52:56] evaluating 3 buffered turns
+[20:53:08] evaluating 3 buffered turns
+[20:53:14] evaluating 3 buffered turns
+[20:53:22] evaluating 3 buffered turns
+[20:53:29] evaluating 3 buffered turns
+[20:53:37] evaluating 3 buffered turns
+[20:53:42] received signal 15, shutting down
+[20:53:42] Overmind stopped.

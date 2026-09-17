@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from overmind import judge  # noqa: E402  (after sys.path fix)
+from overmind import judge, rules, transcript  # noqa: E402  (after sys.path fix)
 
 # ---------------------------------------------------------------------------- knobs
 
@@ -56,8 +56,8 @@ SATURATED = 0.60  # firing on this share of uninterrupted turns is firing on eve
 MAX_OWNER_CHARS = 1200  # the owner's preceding message in the round-1 state, clipped middle-out
 MAX_ASKED_CHARS = 2000  # the same message in the round-2 state, where it is the thing judged
 MAX_REPLY_CHARS = 2500  # the agent's prose for the whole turn, clipped middle-out
-MAX_TOOLS_LISTED = 20  # tool calls shown to Jev; the count is always exact
-MAX_TARGET_CHARS = 160  # one tool call's target (path, command, url)
+MAX_TOOLS_LISTED = judge.MAX_TOOLS_LISTED  # tool calls shown to Jev; the count stays exact
+MAX_TARGET_CHARS = judge.MAX_TARGET  # one tool call's target (path, command, url)
 MAX_QUOTE_CHARS = 400  # owner_next_message stored on an interrupted turn
 MAX_STEP_CHARS = 4000  # prose kept per assistant message; the char count stays exact
 
@@ -211,17 +211,10 @@ NOT_MEASURABLE = {
 # questions in round 1 and should not have been. Each returns (fired, reason) and each is scored
 # for its own accuracy below, against the same corrections the model classes are scored against.
 
-WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
-# A Bash call counts as touching something only if it changes something, and only the paths that
-# come *after* the verb count — `grep /Applications/… ` is a read, `open /Applications/…` is not
-# the same sentence. Reading another project is not the complaint; writing into it is.
-MUTATING_BASH = ("rm ", "rmdir ", "mv ", "cp ", "mkdir ", "touch ", "chmod ", "chown ", "ln -s",
-                 "git commit", "git push", "git add", "git checkout", "git reset", "git rm",
-                 "git mv", "git stash", "git merge", "sed -i", "tee ", ">>", "> ", "open ",
-                 "npm install", "pip install", "brew install", "defaults write", "trash ",
-                 "curl -o", "cat >", "python3 -c", "killall ")
-# Writing here is scratch work, not a room anyone is protective of.
-NEUTRAL_ROOMS = ("/tmp", "/private", "/var", "/dev")
+# Touching the wrong thing lives in overmind/rules.py: it survived this experiment and now
+# runs in the live hook, so there is one implementation and both callers score the same rule.
+WRITE_TOOLS, MUTATING_BASH = rules.WRITE_TOOLS, rules.MUTATING_BASH
+HOME = rules.HOME
 
 # A claim, the words that state it, and the calls that would have produced it. The reply says it;
 # `tool_calls` either shows it or does not. Only the residue — a vaguer claim with no clean
@@ -246,81 +239,10 @@ HEDGES = ("not ", "n't ", "nothing ", "none ", "will ", "would ", "to be ", "bef
           "going to ", "about to ", "once ", "after ", "if ", "when ", "never ", "cannot ",
           "can't ", "yet to ", "un")
 
-HOME = os.path.expanduser("~")
-
-
-SESSION_SIDECAR = "/.claude/projects/"  # Claude Code's own per-project folder, slug for a path
-
-
-def room_of(path: str, cwd: str) -> str:
-    """The room a path belongs to: `Projects/voice`, `.claude`, `/tmp`. Relative paths are cwd's.
-
-    Rooms are read relative to $HOME, because that is where this person's projects live. Outside
-    $HOME the first segment is the room — `/Applications` and `/tmp` are rooms, not neighbours.
-    """
-    path = path.strip().strip("'\"`,;)").rstrip("\\")
-    if path.startswith("~"):
-        path = HOME + path[1:]
-    if not path.startswith("/"):
-        return room_of(cwd, "/") if cwd else ""
-    if path.startswith(HOME + SESSION_SIDECAR):
-        # ~/.claude/projects/-Users-x-Projects-voice/... is voice's own sidecar, not another room.
-        slug = path[len(HOME) + len(SESSION_SIDECAR):].split("/")[0]
-        return room_of(slug.replace("-", "/"), cwd) if slug.startswith("-") else ".claude"
-    if path.startswith(HOME + "/"):
-        parts = [p for p in path[len(HOME) + 1:].split("/") if p]
-        if not parts:
-            return "~"
-        return parts[0] if parts[0].startswith(".") else "/".join(parts[:2])
-    return "/" + path.lstrip("/").split("/")[0]
-
-
-def paths_in(text: str) -> list[str]:
-    """Every absolute or home-relative path-looking token in a command line.
-
-    Targets arrive clipped middle-out at %d chars, so the tokens either side of the cut are
-    halves of paths — `/Users/x/Projec` — and are dropped rather than guessed at.
-    """ % MAX_TARGET_CHARS
-    head, cut, tail = text.partition(" … ")
-    tokens = head.replace("=", " ").split()
-    if cut:
-        tokens = tokens[:-1] + tail.replace("=", " ").split()[1:]
-    out = []
-    for token in tokens:
-        token = token.strip("'\"`,;()").rstrip("\\")
-        if (token.startswith("/") or token.startswith("~/")) and token.count("/") >= 2:
-            out.append(token)
-    return out
-
 
 def rule_wrong_room(view: dict, owner_request: str, cwd: str) -> tuple[bool, str]:
     """Paths written to, against the rooms `owner_request` names and the room the session is in."""
-    here = room_of(cwd, cwd)
-    named = {w.strip(".,:;()'\"`") for w in owner_request.lower().replace("/", " ").split()}
-    named.discard("")
-    outside = []
-    for call in view["tool_calls_all"]:
-        target = call["target"]
-        if call["name"] in WRITE_TOOLS:
-            candidates = [target]
-        elif call["name"] == "Bash":
-            at = min((target.find(m) for m in MUTATING_BASH if m in target), default=-1)
-            if at < 0:
-                continue
-            candidates = paths_in(target[at:])
-        else:
-            continue
-        for path in candidates:
-            room = room_of(path, cwd)
-            if not room or room.startswith(NEUTRAL_ROOMS) or room == here:
-                continue
-            if room.split("/")[-1].lower().lstrip(".") in named:
-                continue
-            outside.append(room)
-    if not outside:
-        return False, ""
-    return True, "wrote in %s, and the turn is in %s" % (", ".join(sorted(set(outside))[:3]),
-                                                         here or "?")
+    return rules.wrong_room(view["tool_calls_all"], owner_request, cwd)
 
 
 def rule_yap(view: dict, owner_request: str, cwd: str) -> tuple[bool, str]:
@@ -445,84 +367,11 @@ CONTROL = ["2113e956", "0f83b22c"]
 
 # ---------------------------------------------------------------------------- transcript reading
 
-MARKER = "[Request interrupted by user"
-JUNK_PREFIXES = ("<command-", "<local-command", "<bash-", "Caveat:", "<system-reminder",
-                 "<task-notification>", "This session is being continued", "API Error",
-                 "<analysis>", "<policy-", MARKER)
-SLASH = "<command-name>"
-TARGET_KEYS = ("file_path", "path", "command", "url", "pattern", "notebook_path", "query",
-               "subagent_type", "description", "name", "prompt")
-
-
-def strip_reminders(text: str) -> str:
-    while "<system-reminder>" in text and "</system-reminder>" in text:
-        head, _, rest = text.partition("<system-reminder>")
-        _, _, tail = rest.partition("</system-reminder>")
-        text = head + tail
-    return text
-
-
-def blocks(message: object) -> list[dict]:
-    """Content blocks of a transcript message, normalised: a bare string becomes one text block."""
-    if not isinstance(message, dict):
-        return []
-    content = message.get("content")
-    if isinstance(content, str):
-        return [{"type": "text", "text": content}]
-    if isinstance(content, list):
-        return [b for b in content if isinstance(b, dict)]
-    return []
-
-
-def tool_target(block: dict) -> str:
-    tool_input = block.get("input")
-    if not isinstance(tool_input, dict):
-        return ""
-    for key in TARGET_KEYS:
-        value = tool_input.get(key)
-        if isinstance(value, str) and value.strip():
-            return judge.clip(" ".join(value.split()), MAX_TARGET_CHARS)
-    return ""
-
-
-def record_text(record: dict) -> str | None:
-    """Concatenated text of a user record, or None when it carries a tool result instead."""
-    parts = []
-    for block in blocks(record.get("message")):
-        if block.get("type") == "tool_result":
-            return None
-        if block.get("type") == "text":
-            parts.append(str(block.get("text") or ""))
-    return strip_reminders("\n".join(parts)).strip()
-
-
-def slash_name(text: str) -> str | None:
-    """`/gu` out of `<command-message>gu</command-message><command-name>/gu</command-name>`."""
-    if SLASH not in text:
-        return None
-    name = text.split(SLASH, 1)[1].split("</command-name>", 1)[0].strip()
-    args = text.split("<command-args>", 1)[1].split("</command-args>", 1)[0].strip() \
-        if "<command-args>" in text else ""
-    return (name + " " + args).strip() or None
-
-
-def human_text(record: dict) -> str | None:
-    """The owner's own words in a user record, or None when it is not one of his messages."""
-    if record.get("isMeta") or record.get("toolUseResult") is not None:
-        return None
-    text = record_text(record)
-    if text is None or not text or text.startswith(JUNK_PREFIXES):
-        return None
-    return text
-
-
-def is_interruption(record: dict) -> bool:
-    if record.get("interruptedMessageId"):
-        return True
-    for block in blocks(record.get("message")):
-        if block.get("type") == "text" and str(block.get("text") or "").lstrip().startswith(MARKER):
-            return True
-    return False
+# Reading a transcript lives in overmind/transcript.py: the hook reads the same records from
+# the same markers, and a second reading of a transcript in this repo would be one too many.
+MARKER, blocks, record_text = transcript.MARKER, transcript.blocks, transcript.record_text
+slash_name, human_text = transcript.slash_name, transcript.human_text
+is_interruption = transcript.is_interruption
 
 
 def find_transcript(prefix: str) -> str:
@@ -570,8 +419,9 @@ class Turn(dict):
                     step["chars"] += len(text)  # exact, even when the text itself is capped
                     step["text"] = judge.clip((step["text"] + "\n" + text).strip(), MAX_STEP_CHARS)
             elif kind == "tool_use":
-                step["tools"].append({"name": str(block.get("name") or "?"),
-                                      "target": tool_target(block)})
+                step["tools"].append(
+                    {"name": str(block.get("name") or "?"),
+                     "target": judge.clip(transcript.tool_target(block), MAX_TARGET_CHARS)})
         self.steps.append(step)
 
     def close(self) -> dict:
@@ -708,13 +558,7 @@ def segment(path: str, session_prefix: str) -> dict:
 # ---------------------------------------------------------------------------- Jev
 
 def tool_lines(view: dict) -> str:
-    lines = ["%s: %s" % (c["name"], c["target"]) if c["target"] else c["name"]
-             for c in view["tool_calls"]]
-    if view["tool_call_count"] > len(view["tool_calls"]):
-        half = len(lines) // 2
-        lines = lines[:half] + ["… %d more tool calls …"
-                                % (view["tool_call_count"] - len(lines))] + lines[half:]
-    return "\n".join(lines)
+    return judge.tool_lines(view["tool_calls_all"])
 
 
 def r1_state(view: dict, owner_request: str, cwd: str) -> dict:

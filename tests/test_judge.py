@@ -5,16 +5,17 @@ import unittest
 from unittest import mock
 
 from overmind import judge
-from tests import IsolatedHome, payload
+from tests import MARKER, TS, IsolatedHome, payload, rec, text, tool, transcript_file
 
-CANNED = {"model": "jev-1.13.0", "answers": {"needs_owner": {"type": "noul", "noul": 0.97123},
-                                              "claims_done": {"type": "noul", "noul": 0.02},
-                                              "drifting": {"type": "noul", "noul": 0.1},
-                                              "stuck": {"type": "noul", "noul": 0.0}},
+CANNED = {"model": "jev-1.13.0", "answers": {"jumped": {"type": "noul", "noul": 0.97123}},
           "usage": {"input_tokens": 689, "output_tokens": 40}}
 
-EVENTS = {"stop": judge.STOP, "user_prompt_submit": judge.PROMPT, "pre_tool_use_bash": judge.BASH,
-          "subagent_stop": judge.SUBAGENT}
+EVENTS = {"stop": judge.STOP, "user_prompt_submit": judge.PROMPT, "pre_tool_use_bash": judge.BASH}
+
+TURN = [rec("user", TS, "why is the history view stale? just answer, don't touch anything"),
+        rec("assistant", TS, text("Let me look.")),
+        rec("assistant", TS, tool("Write", file_path=os.path.expanduser("~/Projects/cmux/x.go")))]
+INTERRUPT = rec("user", TS, text(MARKER), interruptedMessageId="msg_1")
 
 
 class Questions(unittest.TestCase):
@@ -25,44 +26,92 @@ class Questions(unittest.TestCase):
                 self.assertTrue(q["instructions"].startswith(judge.PREFIX), qid)
                 self.assertEqual(set(q["criteria"]), {"true", "false"})
 
-    def test_question_ids_per_event(self) -> None:
-        self.assertEqual(list(judge.STOP), ["needs_owner", "claims_done", "drifting", "stuck"])
-        self.assertEqual(list(judge.PROMPT), ["sharp_turn"])
+    def test_the_question_set_is_the_two_that_were_earned_plus_the_interruption_one(self) -> None:
+        self.assertEqual(list(judge.STOP), ["jumped"])
+        self.assertEqual(list(judge.PROMPT), ["intervention"])
         self.assertEqual(list(judge.BASH), ["risky"])
-        self.assertEqual(list(judge.SUBAGENT), ["claims_done", "needs_parent_decision"])
+        dead = ("lost_you", "too_much", "yap", "missed_point", "spinning", "caving", "no_receipts",
+                "claims_done", "needs_owner", "drifting", "sharp_turn", "needs_parent_decision")
+        asked = json.dumps([judge.STOP, judge.PROMPT, judge.BASH]) + " ".join(dir(judge))
+        for key in dead:
+            self.assertNotIn(key, asked, "%s was dropped by measurement (#15)" % key)
 
     def test_clip_keeps_head_and_tail(self) -> None:
-        text = "a" * 1500 + "b" * 1500
-        clipped = judge.clip(text, 1000)
+        text_in = "a" * 1500 + "b" * 1500
+        clipped = judge.clip(text_in, 1000)
         self.assertTrue(clipped.startswith("a" * 500) and clipped.endswith("b" * 500))
         self.assertEqual(judge.clip("short"), "short")
 
+    def test_elided_tool_calls_keep_the_exact_count(self) -> None:
+        lines = judge.tool_lines([{"name": "Bash", "target": "ls"}] * 40)
+        self.assertIn("20 more tool calls", lines)
+        self.assertEqual(lines.count("Bash: ls"), 20)
+        self.assertEqual(judge.tool_lines([{"name": "Read", "target": ""}]), "Read")
+
 
 class StateBuilding(IsolatedHome):
+    def transcript(self, lines: list, name: str = "s.jsonl") -> str:
+        return transcript_file(self.tmp.name, lines, name)
+
+    def stop(self, lines: list, asked: str = "") -> dict:
+        if asked:
+            judge.remember_prompt(payload("stop")["session_id"], asked)
+        return judge.prepare(dict(payload("stop"), transcript_path=self.transcript(lines)))
+
     def test_every_backticked_path_is_a_state_key(self) -> None:
+        jobs = {"stop": self.stop(TURN, "why is it stale?"),
+                "user_prompt_submit": judge.prepare(payload("user_prompt_submit")),
+                "pre_tool_use_bash": judge.prepare(payload("pre_tool_use_bash"))}
         for name, group in EVENTS.items():
-            state = judge.prepare(payload(name))["state"]
+            state = jobs[name]["state"]
             for qid, q in group.items():
                 for path in re.findall(r"`([^`]+)`", json.dumps(q)):
                     self.assertIn(path, state, "%s.%s references `%s`" % (name, qid, path))
 
-    def test_stop_state(self) -> None:
-        job = judge.prepare(payload("stop"))
-        self.assertEqual(job["header"], {"event": "Stop", "session_id": "ovm-test-stop-0001", "cwd": "demo"})
-        self.assertEqual(set(job["state"]), {"reply", "cwd", "background_tasks", "stop_hook_active", "last_user_prompt"})
-        self.assertEqual(job["state"]["background_tasks"], 0)
-        self.assertIs(job["state"]["stop_hook_active"], False)
-        self.assertEqual(job["state"]["last_user_prompt"], "")
+    def test_a_stop_reads_the_turn_from_the_transcript_and_runs_the_path_rule(self) -> None:
+        job = self.stop(TURN, "why is the history view stale? just answer")
+        self.assertEqual(job["header"], {"event": "Stop", "session_id": "ovm-test-stop-0001",
+                                         "cwd": "demo"})
+        self.assertEqual(job["facts"], {"depth": 2, "tool_calls": 1,
+                                        "state_source": "payload+tail"})
+        self.assertEqual(set(job["state"]), {"owner_asked", "tool_calls"})
+        self.assertIn("Write: " + os.path.expanduser("~/Projects/cmux/x.go"),
+                      job["state"]["tool_calls"])
+        self.assertEqual(job["answers"], {"wrong_room": 1.0}, "cmux is not the room he named")
         self.assertIs(job["questions"], judge.STOP)
 
-    def test_prompt_cache_feeds_next_prompt_and_stop(self) -> None:
-        first = judge.prepare(payload("user_prompt_submit"))
-        self.assertEqual(first["state"]["previous_prompt"], "")
-        second = judge.prepare(dict(payload("user_prompt_submit"), prompt="Now add tests for it."))
-        self.assertEqual(second["state"]["previous_prompt"], payload("user_prompt_submit")["prompt"])
-        self.assertEqual(second["state"]["prompt"], "Now add tests for it.")
-        stop = judge.prepare(payload("stop"))
-        self.assertEqual(stop["state"]["last_user_prompt"], "Now add tests for it.")
+    def test_a_stop_with_nothing_to_compare_asks_nothing(self) -> None:
+        no_prompt = self.stop(TURN)
+        self.assertEqual((no_prompt["questions"], no_prompt["answers"]), ({}, {}))
+        self.assertEqual(no_prompt["facts"]["depth"], 2, "the facts are still worth the line")
+        no_calls = self.stop([rec("user", TS, "explain it"), rec("assistant", TS, text("It is …"))],
+                             "explain it")
+        self.assertEqual((no_calls["questions"], no_calls["facts"]["tool_calls"]), ({}, 0))
+
+    def test_a_prompt_after_an_interruption_is_asked_about_and_one_after_a_turn_is_not(self) -> None:
+        prompt = "Why the fuck are you writing? I asked a question."
+        job = judge.prepare(dict(payload("user_prompt_submit"), prompt=prompt,
+                                 transcript_path=self.transcript(TURN + [INTERRUPT])))
+        self.assertEqual(job["facts"], {"interrupted": True, "depth": 2, "tool_calls": 1,
+                                        "state_source": "payload+tail"})
+        self.assertIs(job["questions"], judge.PROMPT)
+        self.assertEqual(job["state"], {"prompt": prompt})
+        quiet = judge.prepare(dict(payload("user_prompt_submit"), prompt=prompt,
+                                   transcript_path=self.transcript(TURN, "t2.jsonl")))
+        self.assertEqual(quiet["facts"]["interrupted"], False)
+        self.assertEqual(quiet["questions"], {})
+
+    def test_a_transcript_it_cannot_read_names_the_class_and_the_line_goes_on(self) -> None:
+        job = judge.prepare(payload("user_prompt_submit"))  # the fixture path does not exist
+        self.assertEqual(job["facts"], {"interrupted": False, "depth": 0, "tool_calls": 0,
+                                        "state_source": "payload", "tail_error": "FileNotFoundError"})
+        self.assertEqual(job["questions"], {})
+        self.assertEqual(self.stop([], "ask")["facts"]["state_source"], "payload+tail")
+
+    def test_the_prompt_cache_is_what_a_stop_compares_against(self) -> None:
+        judge.prepare(payload("user_prompt_submit"))
+        job = self.stop(TURN)
+        self.assertEqual(job["state"]["owner_asked"], payload("user_prompt_submit")["prompt"])
 
     def test_cache_is_per_session_filename_safe_and_private(self) -> None:
         judge.prepare(dict(payload("user_prompt_submit"), session_id="../evil/../id", prompt="one"))
@@ -76,52 +125,51 @@ class StateBuilding(IsolatedHome):
         job = judge.prepare(payload("pre_tool_use_bash"))
         self.assertEqual(job["header"]["tool_name"], "Bash")
         self.assertEqual(job["state"], {"command": "git push --force origin main", "cwd": "demo"})
+        self.assertEqual(job["facts"], {"state_source": "payload"}, "no transcript is read here")
         write = dict(payload("pre_tool_use_bash"), tool_name="Write", tool_input={"file_path": "/x"})
         self.assertIsNone(judge.prepare(write))
 
-    def test_subagent_state(self) -> None:
-        job = judge.prepare(payload("subagent_stop"))
-        self.assertEqual(job["header"]["agent_type"], "Explore")
-        self.assertEqual(set(job["state"]), {"reply", "agent_type"})
-        self.assertIs(job["questions"], judge.SUBAGENT)
-
     def test_nothing_to_judge(self) -> None:
-        self.assertIsNone(judge.prepare(dict(payload("stop"), last_assistant_message="  ")))
+        self.assertIsNone(judge.prepare(dict(payload("user_prompt_submit"), prompt="  ")))
+        self.assertIsNone(judge.prepare(payload("subagent_stop")), "SubagentStop has no question")
         self.assertIsNone(judge.prepare({"hook_event_name": "SessionStart", "session_id": "s"}))
         self.assertIsNone(judge.prepare({}))
 
     def test_job_carries_no_key_or_payload_extras(self) -> None:
-        dumped = json.dumps(judge.prepare(payload("stop")))
+        dumped = json.dumps(judge.prepare(payload("pre_tool_use_bash")))
         self.assertNotIn("test-key-XYZ", dumped)
         self.assertNotIn("transcript_path", dumped)
 
 
 class Run(IsolatedHome):
-    def test_run_builds_line_without_text(self) -> None:
-        job = judge.prepare(payload("stop"))
+    def job(self) -> dict:
+        judge.remember_prompt(payload("stop")["session_id"], "why is it stale? just answer")
+        return judge.prepare(dict(payload("stop"),
+                                  transcript_path=transcript_file(self.tmp.name, TURN)))
+
+    def test_run_merges_the_rule_with_the_answer_and_stores_no_text(self) -> None:
+        job = self.job()
         with mock.patch.object(judge, "post", return_value=CANNED) as post:
             line = judge.run(job)
         body, key = post.call_args[0]
         self.assertEqual(key, "test-key-XYZ")
-        self.assertEqual((body["model"], body["state"], body["questions"]), (judge.MODEL, job["state"], judge.STOP))
-        self.assertEqual(line["answers"], {"needs_owner": 0.971, "claims_done": 0.02, "drifting": 0.1, "stuck": 0.0})
-        self.assertEqual(line["model"], "jev-1.13.0")
-        self.assertEqual(line["input_tokens"], 689)
+        self.assertEqual((body["model"], body["state"], body["questions"]),
+                         (judge.MODEL, job["state"], judge.STOP))
+        self.assertEqual(line["answers"], {"wrong_room": 1.0, "jumped": 0.971})
+        self.assertEqual((line["model"], line["input_tokens"]), ("jev-1.13.0", 689))
+        self.assertEqual((line["depth"], line["tool_calls"]), (2, 1))
+        self.assertEqual(line["state_source"], "payload+tail")
         self.assertIsInstance(line["ms"], int)
-        self.assertEqual(line["state_source"], "payload")
-        self.assertNotIn("text", line)
+        self.assertNotIn("state", line)
         self.assertNotIn("test-key-XYZ", json.dumps(line))
 
-    def test_opt_in_stores_clipped_text_and_compared_prompt(self) -> None:
+    def test_opt_in_stores_exactly_what_jev_was_shown(self) -> None:
         os.makedirs(os.path.join(self.tmp.name, "opt-in"))
         open(os.path.join(self.tmp.name, "opt-in", "ovm-test-stop-0001"), "w").close()
-        judge.prepare(payload("user_prompt_submit"))
-        long_reply = "x" * (judge.MAX_TEXT + 100)
-        job = judge.prepare(dict(payload("stop"), last_assistant_message=long_reply))
+        job = self.job()
         with mock.patch.object(judge, "post", return_value=CANNED):
             line = judge.run(job)
-        self.assertEqual(line["text"], judge.clip(long_reply))
-        self.assertEqual(line["compared_to"], payload("user_prompt_submit")["prompt"])
+        self.assertEqual(line["state"], job["state"])
 
 
 if __name__ == "__main__":

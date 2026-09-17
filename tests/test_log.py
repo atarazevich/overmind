@@ -17,16 +17,31 @@ class Log(IsolatedHome):
         self.assertEqual(stat.S_IMODE(os.stat(log.events_path()).st_mode), 0o600)
 
     def test_event_line_shape(self) -> None:
-        line = log.event_line("jev-1.13.0", 812, 689, {"needs_owner": 0.9}, event="Stop", session_id="sid", cwd="demo")
-        self.assertEqual(list(line), ["ts", "v", "event", "session_id", "cwd", "model", "ms", "input_tokens",
-                                      "answers", "state_source"])
-        self.assertEqual(line["v"], 1)
+        facts = {"depth": 4, "tool_calls": 7, "state_source": "payload+tail"}
+        line = log.event_line("jev-1.13.0", 812, 689, {"jumped": 0.9}, facts,
+                              event="Stop", session_id="sid", cwd="demo")
+        self.assertEqual(list(line), ["ts", "v", "event", "session_id", "cwd", "depth", "tool_calls",
+                                      "state_source", "answers", "model", "ms", "input_tokens"])
+        self.assertEqual(line["v"], 2)
         self.assertTrue(line["ts"].endswith("+00:00") and len(line["ts"]) == 29)
-        full = log.event_line("m", 1, 2, {}, event="PreToolUse", session_id="sid", cwd="demo", tool_name="Bash")
+        full = log.event_line("m", 1, 2, {}, None, event="PreToolUse", session_id="sid", cwd="demo",
+                              tool_name="Bash")
         self.assertEqual(full["tool_name"], "Bash")
 
-    def test_error_line_shape(self) -> None:
-        self.assertEqual(set(log.error_line("Stop", "sid", "no_key")), {"ts", "v", "event", "session_id", "error"})
+    def test_fact_line_is_a_line_no_request_was_made_for(self) -> None:
+        line = log.fact_line({"interrupted": False, "depth": 2}, event="UserPromptSubmit",
+                             session_id="sid", cwd="demo")
+        self.assertEqual(list(line), ["ts", "v", "event", "session_id", "cwd", "interrupted",
+                                      "depth", "answers"])
+        self.assertEqual((line["answers"], line["interrupted"]), ({}, False))
+        self.assertNotIn("model", line, "no model means no request was made")
+
+    def test_error_line_keeps_the_facts_it_already_read(self) -> None:
+        self.assertEqual(set(log.error_line("Stop", "sid", "no_key")),
+                         {"ts", "v", "event", "session_id", "error"})
+        with_facts = log.error_line("UserPromptSubmit", "sid", "URLError", {"interrupted": True})
+        self.assertEqual(with_facts["interrupted"], True)
+        self.assertEqual(with_facts["error"], "URLError")
 
     def test_read_since_and_limit(self) -> None:
         self.assertEqual(log.read(), [])

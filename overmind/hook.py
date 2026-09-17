@@ -27,6 +27,7 @@ def detach() -> bool:
 
 def main() -> None:
     event = sid = ""
+    job = None
     try:
         from overmind import judge, log
 
@@ -37,8 +38,11 @@ def main() -> None:
         job = judge.prepare(payload)
         if job is None:
             return
+        if not job["questions"]:  # nothing worth paying for: the facts are the line
+            log.append(log.fact_line(job["facts"], job["answers"], **job["header"]))
+            return
         if not os.environ.get(judge.KEY_ENV):
-            log.append(log.error_line(event, sid, "no_key"))
+            log.append(log.error_line(event, sid, "no_key", job["facts"]))
             return
         if detach():
             log.append(judge.run(job))
@@ -46,7 +50,7 @@ def main() -> None:
         try:
             from overmind import log
 
-            log.append(log.error_line(event, sid, type(exc).__name__))
+            log.append(log.error_line(event, sid, type(exc).__name__, job["facts"] if job else None))
         except Exception:  # noqa: BLE001
             pass
 

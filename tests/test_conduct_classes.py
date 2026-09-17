@@ -11,26 +11,13 @@ import re
 import tempfile
 import unittest
 
+from tests import rec, text, tool
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SPEC = importlib.util.spec_from_file_location(
     "conduct_classes", os.path.join(os.path.dirname(HERE), "experiments", "conduct_classes.py"))
 cc = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cc)
-
-
-def rec(kind: str, ts: str, content: object, **extra: object) -> str:
-    line = {"type": kind, "timestamp": ts, "sessionId": "s-1", "cwd": "/tmp/demo",
-            "message": {"role": kind, "content": content}}
-    line.update(extra)
-    return json.dumps(line)
-
-
-def text(body: str) -> list:
-    return [{"type": "text", "text": body}]
-
-
-def tool(name: str, **tool_input: object) -> list:
-    return [{"type": "tool_use", "name": name, "input": tool_input}]
 
 
 def a_turn(steps: list, request: str = "look at it", index: int = 0) -> cc.Turn:
@@ -248,22 +235,11 @@ class Rules(unittest.TestCase):
         self.assertFalse(self.fire(cc.rule_yap, long_reply, "Q" * cc.YAP_MIN_CHARS),
                          "a long answer to a long question is not yapping")
 
-    def test_wrong_room_reads_paths_written_against_paths_named(self) -> None:
+    def test_wrong_room_reads_the_turn_calls_through_the_shared_rule(self) -> None:
+        """The rule itself is tested in tests/test_rules.py; this is the turn reaching it."""
         other = [("", [("Write", self.HOME + "/Projects/cmux/main.go")])]
         self.assertTrue(self.fire(cc.rule_wrong_room, other, "fix the parser"))
-        self.assertFalse(self.fire(cc.rule_wrong_room, other, "fix the parser in cmux"),
-                         "a room he named is a room he permitted")
-        self.assertFalse(self.fire(cc.rule_wrong_room,
-                                   [("", [("Write", self.HOME + "/Projects/voice/a.py")])],
-                                   "fix it"))
-        self.assertFalse(self.fire(cc.rule_wrong_room,
-                                   [("", [("Read", self.HOME + "/Projects/cmux/m.go")])],
-                                   "fix it"), "reading another project is not the complaint")
-        self.assertFalse(self.fire(cc.rule_wrong_room,
-                                   [("", [("Write", self.HOME + "/.claude/projects/"
-                                                    + self.HOME.replace("/", "-")
-                                                    + "-Projects-voice/memory/MEMORY.md")])],
-                                   "fix it"), "this project's own sidecar is this project's room")
+        self.assertFalse(self.fire(cc.rule_wrong_room, other, "fix the parser in cmux"))
 
     def test_no_receipts_wants_the_call_that_would_have_produced_the_claim(self) -> None:
         claim = "All done and committed."

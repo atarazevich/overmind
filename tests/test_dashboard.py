@@ -103,6 +103,20 @@ class Events(Endpoint):
         for bad in ("x", "0", "-5"):
             self.assertEqual(self.call("GET", "/events?limit=" + bad)[0], 400, bad)
 
+    def test_v1_lines_are_still_served_and_still_labelable(self) -> None:
+        """A day of v1 lines is already on disk; schema v2 may not orphan them."""
+        v1 = {"ts": TS % 0, "v": 1, "event": "Stop", "session_id": "sid", "cwd": "demo",
+              "model": "jev-1.13.0", "ms": 800, "input_tokens": 500,
+              "answers": {"needs_owner": 0.91}, "state_source": "payload"}
+        log.append(v1)
+        log.append(log.event_line("jev-1.13.0", 800, 500, {"jumped": 0.4},
+                                  {"depth": 3, "tool_calls": 2, "state_source": "payload+tail"},
+                                  event="Stop", session_id="sid", cwd="demo"))
+        self.assertEqual([x["v"] for x in self.call("GET", "/events")[1]], [1, 2])
+        status, line = self.post_label(event_ts=TS % 0, session_id="sid",
+                                       question="needs_owner", label="y")
+        self.assertEqual((status, line["prob"]), (200, 0.91))
+
     def test_text_passes_through_only_when_the_line_has_it(self) -> None:
         log.append({"ts": TS % 0, "session_id": "a", "answers": {"risky": 0.9}})
         log.append({"ts": TS % 1, "session_id": "b", "answers": {"risky": 0.9}, "text": "rm -rf build"})

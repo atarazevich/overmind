@@ -1,6 +1,14 @@
-"""JSONL append and read for Overmind. Schema v1: ids, timestamps, numbers; text only on opt-in.
+"""JSONL append and read for Overmind. Schema v2: ids, timestamps, numbers; text only on opt-in.
 
 Runtime dir: ~/Library/Application Support/Overmind (override with OVERMIND_HOME, used by tests).
+
+**v2 (2026-09-18, #16).** Lines carry the facts read from the payload and the transcript tail
+beside the answers: `interrupted` / `depth` / `tool_calls` on UserPromptSubmit, `depth` /
+`tool_calls` on Stop, `tail_error` when the tail failed. `state_source` moved out of this module
+into those facts, because it now says "payload" or "payload+tail" per event rather than one
+constant. A line with no `model` is a line no Jev request was made for — the facts alone.
+v1 lines stay exactly as written and the dashboard reads both: it keys on `answers` and `ts`,
+which neither version moved.
 """
 from __future__ import annotations
 
@@ -8,7 +16,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-V = 1
+V = 2
 LABELS = ("y", "n", "s")  # the owner's mark on a fired signal: right, wrong, skip
 
 
@@ -32,14 +40,26 @@ def dumps(obj: object) -> str:
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
 
 
-def event_line(model: str, ms: int, input_tokens: int | None, answers: dict[str, float], **header: str) -> dict:
-    """header: event, session_id, cwd and, when present, agent_type / tool_name."""
-    return {"ts": now(), "v": V, **header, "model": model, "ms": ms, "input_tokens": input_tokens,
-            "answers": answers, "state_source": "payload"}
+def fact_line(facts: dict, answers: dict[str, float] | None = None, **header: str) -> dict:
+    """A line written without asking Jev: the header, the facts, and whatever the rules decided.
+
+    header: event, session_id, cwd and, when present, tool_name. facts: what the payload and the
+    transcript tail said — free, read rather than judged, and the denominators of every rate."""
+    return {"ts": now(), "v": V, **header, **facts, "answers": answers or {}}
 
 
-def error_line(event: str, session_id: str, error: str) -> dict:
-    return {"ts": now(), "v": V, "event": event, "session_id": session_id, "error": error}
+def event_line(model: str, ms: int, input_tokens: int | None, answers: dict[str, float],
+               facts: dict | None = None, **header: str) -> dict:
+    """A fact line plus what the Jev request returned and cost."""
+    return {**fact_line(facts or {}, answers, **header), "model": model, "ms": ms,
+            "input_tokens": input_tokens}
+
+
+def error_line(event: str, session_id: str, error: str, facts: dict | None = None) -> dict:
+    """What is known when something threw. The facts ride along: a transcript tail that already
+    said the owner interrupted is not worth losing to a failed network call."""
+    return {"ts": now(), "v": V, "event": event, "session_id": session_id, **(facts or {}),
+            "error": error}
 
 
 def label_line(event_ts: str, session_id: str, question: str, prob: float, label: str) -> dict:

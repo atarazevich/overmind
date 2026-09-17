@@ -73,6 +73,16 @@ The discriminator is the **register of the message that follows the interrupt** 
 rule cannot read and Jev can. Every Correction is a labeled negative for free; every Nudge is a
 labeled non-event. This is what makes the calibration curve draw itself.
 
+**Live since #16.** On every `UserPromptSubmit` the hook reads the last 256 KB of the session
+transcript backwards to the owner's previous message — 96% of his 48 interruptions sit inside that
+window — and records `interrupted`, `depth` (assistant messages since he last spoke) and
+`tool_calls`, free, read and never judged. Only when `interrupted` is true does it pay for one
+question, `intervention`: **1.0 is a Correction, 0.0 a Nudge**, asked about the register of the
+message and nothing else. Depth sits beside the answer as a fact and is deliberately kept out of
+the state: a question able to read the length of what it judges will go on to measure the length,
+which is exactly what round 1 did. On the owner's own escapes it reads 0.09 for *"you can use
+quick haiku subagents…"* and 0.95 for *"Why the fuck you writing?"*.
+
 ---
 
 ## What survived measurement — 2026-09-17
@@ -107,6 +117,13 @@ rewritten; they do not stay because they work.
 The result has a pleasing shape: the single signal that survived is the one complaint that is
 uniquely the owner's and appears nowhere in the public corpus — *"You default into acting, and I'm
 asking you."*
+
+**What the hook asks now (#16).** `jumped` on Stop, against his request and the turn's tool calls
+read from the transcript; `risky` on a Bash call; `intervention` on a prompt that follows an
+interruption. Beside `jumped`, in code and for free, the path rule. Everything else on this page
+below this line is **not asked of anything** — it is kept because the naming is worth keeping and a
+question may yet be rewritten, not because it works. The tables below are the record, not the
+configuration.
 
 ## Not classes — facts the text already states
 

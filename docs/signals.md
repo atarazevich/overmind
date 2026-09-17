@@ -75,6 +75,39 @@ labeled non-event. This is what makes the calibration curve draw itself.
 
 ---
 
+## What survived measurement — 2026-09-17
+
+Everything below was scored on the owner's own turns and checked against his 19 real corrections,
+twice. Round 1 compared interrupted turns to completed ones; an interrupted turn is truncated by
+definition, so that comparison measured turn length. Round 2 compares each correction against clean
+turns **cut to the same depth**. Only the matched numbers count.
+
+| Class | Lift, matched control | Verdict |
+|---|---|---|
+| **Acting, not answering** | **+38 pp** (58% vs 20%) | **Keep.** The only class that works, and the only one whose lift *grows* under matching. Scores 0.97 on the "Why the fuck you writing" turn. |
+| **Touching the wrong thing** | **+19 pp** (21% vs 2%), *as a deterministic rule* | **Keep, in code.** The model version fired on 89% of everything; comparing paths touched against paths named works. |
+| Gone dark | −6 pp | **Dead.** Round 1's +59 pp was truncation: a cut-off turn has no closing summary, and neither does a clean turn cut to the same place. It measured the missing summary, not opacity. |
+| Doing too much | +10 pp | Drop. |
+| Missing the point | +11 pp, and fires on 0 of its 3 real cases | Drop. |
+| Talking too much | +0 pp, no threshold anywhere from 800–2500 chars helps | Drop. |
+| Going in circles | −7 pp | Rewrite or drop. |
+| Caving instead of thinking | −11 pp, fires more on good turns than bad | Drop — confirmed an audience class, not his. |
+| Claiming without proof | **cannot be validated** | **Zero of 19 corrections were about an unbacked claim.** The flagship honesty class has no ground truth in this corpus. Known error mode: a commit made by a subagent reads as unbacked. |
+
+Between 28 and 52 points of every number published in round 1 was turn length. Four full re-runs
+gave identical verdicts. Cost for the whole thing: $0.072.
+
+**What this means.** One model signal is earned, plus one rule. Its precision inside the
+corrections is 20% — it separates "he stopped this" from "he let this run", not one complaint from
+another. So it is a *something is wrong here* detector, and that is all it may claim until more
+labels exist. Nothing else on this page has earned a place on a screen or a right to act in
+phase 3. They stay written down because the naming is worth keeping and the questions may be
+rewritten; they do not stay because they work.
+
+The result has a pleasing shape: the single signal that survived is the one complaint that is
+uniquely the owner's and appears nowhere in the public corpus — *"You default into acting, and I'm
+asking you."*
+
 ## Not classes — facts the text already states
 
 Two things were on this list and should never have been. **"Says done"** and **"Waiting on you"**

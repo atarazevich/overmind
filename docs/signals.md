@@ -13,6 +13,11 @@ So: no "helpfulness score", no "quality index", no "alignment rating". Every nam
 dashboard is a **specific observed failure**, and every one below is backed by a real quote from
 one of the three evidence sets in `docs/research/`.
 
+**The grammar rule.** Every name is a phrase that reads on its own as the complaint, in the
+same form as every other name. "Too much" fails the test — too much *what*? "Doing too much" reads.
+A name is not allowed to need the column next to it to make sense. Where that costs a few extra
+characters on a chart label, pay the characters.
+
 Two more rules fall out of the same source:
 - **The unit is the run, not the request.** A person asks "how did that session go", never "how
   did message 47 go".
@@ -89,7 +94,7 @@ no room on the board.
 
 | Name | Key | Means | You'd do | Is not | Evidence |
 |---|---|---|---|---|---|
-| **No receipts** | `no_receipts` | It stated an outcome its own actions don't show: "tests pass" with no test run, "committed" with no commit. | Ask for the number, the diff, the exit code. | Honest hedging ("not committed yet"). | Owner: *"you don't say how much. Slower how much slower? Did you measure"*. Reddit: *"done isnt something the agent says. its something it shows u"*, *"Done was a vibe, not a fact"*. |
+| **Claiming without proof** | `no_receipts` | It stated an outcome its own actions don't show: "tests pass" with no test run, "committed" with no commit. | Ask for the number, the diff, the exit code. | Honest hedging ("not committed yet"). | Owner: *"you don't say how much. Slower how much slower? Did you measure"*. Reddit: *"done isnt something the agent says. its something it shows u"*, *"Done was a vibe, not a fact"*. |
 
 One signal, because there is one question worth paying for: **not whether it said done, but whether
 the saying was backed.** The fact that it claimed done is free; the gap between the claim and the
@@ -100,27 +105,27 @@ The tooltip's definition of done, borrowed verbatim because nobody has said it b
 
 Note the convergence in the evidence. The owner never accuses an agent of inventing a fact — not
 once in 90 days. His complaint is always *unshown*, never *untrue*. The public complaint is
-*untrue*. Both are answered by the same signal, which is why **No receipts** is the flagship.
+*untrue*. Both are answered by the same signal, which is why **Claiming without proof** is the flagship.
 
 ## Per-turn signals — conduct
 
 | Name | Key | Means | You'd do | Is not | Evidence |
 |---|---|---|---|---|---|
-| **Too much** | `too_much` | It did more than you asked — extra files, extra features, a refactor nobody ordered. | Pull it back. | A side fix it names as such. | Owner's #1 complaint, 8 hits: *"bro, you are doing too much. tell me what's up, calm down, be brief"*. Reddit: *"I asked it to update 3 files… and it made 20 structural code updates"*, *"The plan being right and the diff being wrong is the part that gets me."* |
-| **Wrong room** | `wrong_room` | It touched something outside the task. | Stop it before the next write. | Working in a shared file it had to touch. | Owner, 6 hits: *"we are not in cmux, pls make sure that you don't touch cmux."* Reddit's stated gap: *"it's a change log, not an attribution log"*. |
-| **Jumped** | `jumped` | You asked a question; it started doing work instead of answering. | Say "answer, don't act". | A question that genuinely needs a lookup first. | Owner, 6 hits: *"Why the fuck you writing? Don't write delete immediately what you wrote I'm asking you question it's a question. You default into acting"*. No public equivalent — this one is his. |
-| **Lost you** | `lost_you` | You can no longer tell what it is doing or where it is. | Ask for status; consider stopping. | A long run that reports as it goes. | Owner, 5 hits, one at 44 assistant messages deep: *"Так, давай паузу, давай синхронизируемся, что у нас тут происходит"*. Reddit: *"A permission prompt with nobody sitting there to answer it is just a very polite stop button."* |
-| **Missed the point** | `missed_point` | It's solving a different problem than the one you have. | Restate the point, once. | A clarifying question. | Owner, 9 hits combined: *"Dude, you don't get the point."* / *"Ill be honest. That's not what I intended nor I understood the value of what was produced."* (all four of the latter are design/UI work). |
-| **Yap** | `yap` | The reply is long where a line would do. | Nothing; it's a cost, not a fault. | A long reply to a question that needed one. | Owner: *"calm down, be brief"*. Reddit [common]: "yapping", "word salad", *"The full hero's journey"*, *"It has invented an entire private dialect. Everything is load-bearing."* |
+| **Doing too much** | `too_much` | It did more than you asked — extra files, extra features, a refactor nobody ordered. | Pull it back. | A side fix it names as such. | Owner's #1 complaint, 8 hits: *"bro, you are doing too much. tell me what's up, calm down, be brief"*. Reddit: *"I asked it to update 3 files… and it made 20 structural code updates"*, *"The plan being right and the diff being wrong is the part that gets me."* |
+| **Touching the wrong thing** | `wrong_room` | It touched something outside the task. | Stop it before the next write. | Working in a shared file it had to touch. | Owner, 6 hits: *"we are not in cmux, pls make sure that you don't touch cmux."* Reddit's stated gap: *"it's a change log, not an attribution log"*. |
+| **Acting, not answering** | `jumped` | You asked a question; it started doing work instead of answering. | Say "answer, don't act". | A question that genuinely needs a lookup first. | Owner, 6 hits: *"Why the fuck you writing? Don't write delete immediately what you wrote I'm asking you question it's a question. You default into acting"*. No public equivalent — this one is his. |
+| **Gone dark** | `lost_you` | You can no longer tell what it is doing or where it is. | Ask for status; consider stopping. | A long run that reports as it goes. | Owner, 5 hits, one at 44 assistant messages deep: *"Так, давай паузу, давай синхронизируемся, что у нас тут происходит"*. Reddit: *"A permission prompt with nobody sitting there to answer it is just a very polite stop button."* |
+| **Missing the point** | `missed_point` | It's solving a different problem than the one you have. | Restate the point, once. | A clarifying question. | Owner, 9 hits combined: *"Dude, you don't get the point."* / *"Ill be honest. That's not what I intended nor I understood the value of what was produced."* (all four of the latter are design/UI work). |
+| **Talking too much** | `yap` | The reply is long where a line would do. | Nothing; it's a cost, not a fault. | A long reply to a question that needed one. | Owner: *"calm down, be brief"*. Reddit [common]: "yapping", "word salad", *"The full hero's journey"*, *"It has invented an entire private dialect. Everything is load-bearing."* |
 
 ## Per-turn signals — rules and containment
 
 | Name | Key | Means | You'd do | Is not | Evidence |
 |---|---|---|---|---|---|
-| **Rule dropped** | `rule_dropped` | It did something the project's rules forbid, without saying it was doing so. | Decide whether the rule or the behaviour is wrong. | An explicit, named exception. | Reddit, many threads: *"I even quoted them back to you accurately. I still didn't follow them."* / *"my CLAUDE.md rules have already gone quiet. Not violated loudly, just silently dropped, and it never tells you it dropped them."* Owner: *"I don't approve that update to model choice. Change it back."* |
-| **Risky move** | `risky` | The command it's about to run is hard or impossible to undo. | Decide before it runs (phase 3); today, notice. | A read, a build, a test. | Live: fires on 22 of 258 Bash calls (9%). Reddit: *"the dangerous command isn't the one you'd match… the `rm -rf` is buried inside the script it just wrote."* |
-| **Spinning** | `stuck` | Repeating a failing attempt without new information. | Step in; change the approach. | A first failure. | Reddit, many threads: *"we literally spent two hours in this brain-dead loop"*, *"Fix one, break two"*. **Zero fires in the owner's data so far** — kept because the public evidence is overwhelming, but it is on probation. |
-| **Burn** | `burn` | Money or quota going out with nothing coming back. | Cap it. | An expensive task that delivered. | Reddit, many threads: *"$544.43"* from a *"rogue loop"*; *"burned 36% of my weekly cap in 32 minutes and ignored my all-caps stop order — twice."* **The owner has never once complained about cost.** Shown because the audience needs it, not because he does. |
+| **Ignoring the rules** | `rule_dropped` | It did something the project's rules forbid, without saying it was doing so. | Decide whether the rule or the behaviour is wrong. | An explicit, named exception. | Reddit, many threads: *"I even quoted them back to you accurately. I still didn't follow them."* / *"my CLAUDE.md rules have already gone quiet. Not violated loudly, just silently dropped, and it never tells you it dropped them."* Owner: *"I don't approve that update to model choice. Change it back."* |
+| **About to break something** | `risky` | The command it's about to run is hard or impossible to undo. | Decide before it runs (phase 3); today, notice. | A read, a build, a test. | Live: fires on 22 of 258 Bash calls (9%). Reddit: *"the dangerous command isn't the one you'd match… the `rm -rf` is buried inside the script it just wrote."* |
+| **Going in circles** | `stuck` | Repeating a failing attempt without new information. | Step in; change the approach. | A first failure. | Reddit, many threads: *"we literally spent two hours in this brain-dead loop"*, *"Fix one, break two"*. **Zero fires in the owner's data so far** — kept because the public evidence is overwhelming, but it is on probation. |
+| **Burning money** | `burn` | Money or quota going out with nothing coming back. | Cap it. | An expensive task that delivered. | Reddit, many threads: *"$544.43"* from a *"rogue loop"*; *"burned 36% of my weekly cap in 32 minutes and ignored my all-caps stop order — twice."* **The owner has never once complained about cost.** Shown because the audience needs it, not because he does. |
 
 ---
 
@@ -132,8 +137,8 @@ from labels.
 | State | Rule (initial) | Reads as |
 |---|---|---|
 | **Wants you** | stopped, and the last line asks you something — read, not judged | "This tab needs me." |
-| **Off the rails** | Too much or Wrong room fired on two of the last three turns | "It wandered." |
-| **Spinning** | Spinning fired on two consecutive stops | "It's looping." |
+| **Off the rails** | Doing too much or Touching the wrong thing fired on two of the last three turns | "It wandered." |
+| **Going in circles** | Spinning fired on two consecutive stops | "It's looping." |
 | **Working** | events in the last 10 minutes, none of the above | "Leave it alone." |
 | **Idle** | no events for 10 minutes to 2 hours | "Paused, or waiting for me without saying so." Dimmed, stays listed. |
 | **Quiet** | no events for 2 hours | Leaves the Now list. |
@@ -146,9 +151,9 @@ Six, deliberately. "Too many metrics fragment your attention."
 |---|---|---|
 | **Corrections** | How many times today did I have to stop something going wrong? | count of Correction (not Nudge) |
 | **Clean runs** | How many sessions ran without me? | runs with zero Corrections ÷ runs |
-| **Receipts** | When it said done, did it show the work? | claims with evidence ÷ claims made (both read, not judged) |
+| **Claims backed** | When it said done, did it show the work? | claims with evidence ÷ claims made (both read, not judged) |
 | **Trust** | When the judge says 0.8, is it right 8 times in 10? | reliability curve from labels, per signal |
-| **Near misses** | How many risky moves did agents attempt? | count of Risky move fired |
+| **Near misses** | How many risky moves did agents attempt? | count of About to break something fired |
 | **Cost** | What did watching cost? | input tokens × $0.042/M |
 
 ---
@@ -161,7 +166,7 @@ Honesty about what the evidence killed matters as much as what it kept.
 |---|---|
 | **Attention saved** | A vanity metric by Hamel's test — it measures our cleverness, not a failure. |
 | **Forgot** | The owner's corpus shows **no memory problem**: 42 apparent repeat-instructions collapse to 2 real ones; the rest are a relay preamble and his dictation app double-sending. Do not build a detector for a problem that isn't there. |
-| **Drift** as its own signal | Merged into **Too much**. Same complaint, same fix, two names was one too many. |
+| **Drift** as its own signal | Merged into **Doing too much**. Same complaint, same fix, two names was one too many. |
 | **Sharp turn** as an alarm | Fires on 46% of prompts. That is not an alarm, that is the shape of a conversation. Demoted to a timeline marker. |
 | **Waiting on you** as a day metric | Fires on 41% of stops. It's the normal state of collaboration, not a failure. Kept as a run state only. |
 | **Interruptions** as a metric name | Imprecise: 52% of them are Nudges. Replaced by **Corrections**. |
@@ -172,11 +177,11 @@ Honesty about what the evidence killed matters as much as what it kept.
 
 | Name | The complaint | What it would need |
 |---|---|---|
-| **Ghost work** | It says it ran a command that never ran. | The turn's tool results next to its claims. The strongest public complaint we cannot yet see. |
-| **Test theater** | Green because the test was neutered. *"If breaking the code doesn't turn the test red, there is no test."* | The diff plus the test run. |
-| **Placation** | It agreed with you instead of thinking. *"It's not a collaborator weighing my idea. It's a mirror with good manners."* | Your prompt, its reply, and what it did next. Many threads say this; **the owner has never once complained about it**. Build it for the audience, not for him. |
+| **Saying it ran when it didn't** | It says it ran a command that never ran. | The turn's tool results next to its claims. The strongest public complaint we cannot yet see. |
+| **Neutering the test** | Green because the test was neutered. *"If breaking the code doesn't turn the test red, there is no test."* | The diff plus the test run. |
+| **Caving instead of thinking** | It agreed with you instead of thinking. *"It's not a collaborator weighing my idea. It's a mirror with good manners."* | Your prompt, its reply, and what it did next. Many threads say this; **the owner has never once complained about it**. Build it for the audience, not for him. |
 | **Context rot** | Named four ways by Breunig and used industry-wide: poisoning, distraction, confusion, clash. | Compaction boundaries as events. Do not rename these; the vocabulary is already settled. |
-| **Dead guardrail** | A hook that silently stopped firing. *"the command ran, exit code 0, nothing happened."* | A last-fired timestamp per hook — trivial, and Overmind is itself a hook, so it should hold itself to it. |
+| **A guard that stopped firing** | A hook that silently stopped firing. *"the command ran, exit code 0, nothing happened."* | A last-fired timestamp per hook — trivial, and Overmind is itself a hook, so it should hold itself to it. |
 
 ## How it all connects
 

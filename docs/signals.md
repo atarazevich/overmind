@@ -27,6 +27,7 @@ A state is not a Jev answer; it's a rule over recent signals. Thresholds are nam
 | **Off course** | *Drift* ≥ 0.5 on two of the last three stops | "It wandered." |
 | **Spinning** | *Stuck* ≥ 0.5 on two consecutive stops | "It's looping." |
 | **Working** | events in the last 10 minutes, none of the above | "Leave it alone." |
+| **Idle** | no events for 10 minutes to 2 hours, none of the above | "Paused, or waiting for me without saying so." Stays in the list, dimmed. |
 | **Quiet** | no events for 2 hours | Leaves the Now list. |
 
 ## Per day — what History shows

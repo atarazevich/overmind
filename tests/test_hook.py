@@ -28,20 +28,20 @@ class HookContract(IsolatedHome):
             with open(os.path.join(HERE, "payloads", name + ".json"), "rb") as f:
                 proc = self.run_hook(f.read(), key=False)
             self.assertEqual((proc.returncode, proc.stdout), (0, b""), name)
-        self.assertEqual([x["error"] for x in log.tail(100)], ["no_key"] * 4)
-        self.assertEqual([x["event"] for x in log.tail(100)], ["Stop", "UserPromptSubmit", "PreToolUse", "SubagentStop"])
+        self.assertEqual([x["error"] for x in log.read(limit=100)], ["no_key"] * 4)
+        self.assertEqual([x["event"] for x in log.read(limit=100)], ["Stop", "UserPromptSubmit", "PreToolUse", "SubagentStop"])
 
     def test_malformed_payload_logs_error_class(self) -> None:
         with open(os.path.join(HERE, "payloads", "malformed.json"), "rb") as f:
             proc = self.run_hook(f.read())
         self.assertEqual((proc.returncode, proc.stdout), (0, b""))
-        self.assertEqual(log.tail(100)[0]["error"], "JSONDecodeError")
+        self.assertEqual(log.read(limit=100)[0]["error"], "JSONDecodeError")
         proc = self.run_hook(b"[1, 2]")
         self.assertEqual((proc.returncode, proc.stdout), (0, b""))
-        self.assertEqual(log.tail(100)[1]["error"], "TypeError")
+        self.assertEqual(log.read(limit=100)[1]["error"], "TypeError")
         proc = self.run_hook(b"")
         self.assertEqual((proc.returncode, proc.stdout), (0, b""))
-        self.assertEqual(len(log.tail(100)), 2, "empty stdin is nothing to judge, not an error")
+        self.assertEqual(len(log.read(limit=100)), 2, "empty stdin is nothing to judge, not an error")
 
     def test_nothing_to_judge_writes_nothing_even_without_key(self) -> None:
         body = json.dumps({"hook_event_name": "PreToolUse", "session_id": "s", "tool_name": "Write",
@@ -49,7 +49,7 @@ class HookContract(IsolatedHome):
         for key in (True, False):
             proc = self.run_hook(body, key=key)
             self.assertEqual((proc.returncode, proc.stdout), (0, b""))
-        self.assertEqual(log.tail(100), [])
+        self.assertEqual(log.read(limit=100), [])
 
     def test_broken_import_still_exits_zero_and_silent(self) -> None:
         """A copy of hook.py whose sibling package lacks judge/log: the import inside main() fails."""
@@ -60,7 +60,7 @@ class HookContract(IsolatedHome):
         with open(os.path.join(HERE, "payloads", "stop.json"), "rb") as f:
             proc = subprocess.run([sys.executable, dst.name], input=f.read(), capture_output=True, timeout=10)
         self.assertEqual((proc.returncode, proc.stdout, proc.stderr), (0, b"", b""))
-        self.assertEqual(log.tail(100), [])
+        self.assertEqual(log.read(limit=100), [])
 
 
 class InProcess(IsolatedHome):
@@ -77,7 +77,7 @@ class InProcess(IsolatedHome):
                 mock.patch.object(sys, "stdout", io.StringIO()) as out:
             hook.main()
         self.assertEqual(out.getvalue(), "")
-        return log.tail(10)
+        return log.read(limit=10)
 
     def test_success_line(self) -> None:
         lines = self.run_main(mock.Mock(return_value=CANNED))

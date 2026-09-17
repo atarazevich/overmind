@@ -27,7 +27,8 @@ Prior art: Overmind v1 (`archive/v1/`, April 2026) tried the same with an LLM wa
 | `overmind/hook.py` | The one hook entry point: reads the event payload on stdin, builds state, detaches the Jev call, appends to the log |
 | `overmind/judge.py` | The questions, the state builders per event, the Jev client |
 | `overmind/log.py` | JSONL append + read; schema versioned |
-| `overmind/dashboard.py` | Local server + HTML for now / timeline / history / labels |
+| `overmind/dashboard.py` | Local stdlib server on 127.0.0.1:8767: the page, `/vendor/*`, `/events`, `/sessions`, `/labels`, `POST /label` |
+| `overmind/static/` | `dashboard.html` (now / timeline / history / labels, aggregates client-side) and `vendor/` (Plotly) |
 | `docs/plan.md` | The phases and their acceptance |
 | `docs/decisions.md` | Dated decisions |
 | `experiments/` | One folder per experiment, timestamped results |

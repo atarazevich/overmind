@@ -10,7 +10,7 @@ from overmind import log  # noqa: E402
 
 def main() -> None:
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-    for line in log.tail(n):
+    for line in log.read(limit=n):
         answers = line.get("answers") or {}
         detail = " ".join("%s=%.2f" % kv for kv in answers.items()) or ("error=" + str(line.get("error", "?")))
         print("%s  %-16s %-8s %-14s %5s ms  %s" % (line.get("ts", "")[11:19], line.get("event", ""),

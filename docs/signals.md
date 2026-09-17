@@ -184,12 +184,14 @@ once in 90 days. His complaint is always *unshown*, never *untrue*. The public c
 A state is a rule over recent signals, not a model answer. Thresholds are named constants, set
 from labels.
 
+**Off the rails** and **Going in circles** were removed on 2026-09-18. Both rested on classes the
+matched control dropped, so keeping them would have left unproven signals on the board wearing a
+different name. A state may not outlive the signal underneath it.
+
 | State | Rule (initial) | Reads as |
 |---|---|---|
 | **Wants you** | stopped, and the last line asks you something — read, not judged | "This tab needs me." |
-| **Off the rails** | Doing too much or Touching the wrong thing fired on two of the last three turns | "It wandered." |
-| **Going in circles** | Spinning fired on two consecutive stops | "It's looping." |
-| **Working** | events in the last 10 minutes, none of the above | "Leave it alone." |
+| **Working** | events in the last 10 minutes, and not wanting you | "Leave it alone." |
 | **Idle** | no events for 10 minutes to 2 hours | "Paused, or waiting for me without saying so." Dimmed, stays listed. |
 | **Quiet** | no events for 2 hours | Leaves the Now list. |
 

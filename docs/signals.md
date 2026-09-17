@@ -70,20 +70,37 @@ labeled non-event. This is what makes the calibration curve draw itself.
 
 ---
 
+## Not classes — facts the text already states
+
+Two things were on this list and should never have been. **"Says done"** and **"Waiting on you"**
+are not alignment problems. When an agent is done it says it is done; when it needs you it says so.
+Reading that back to you is not a judgment, it is a transcription, and asking a model for it is
+paying for a coin flip on something the text already tells you.
+
+The rule, borrowed from Lore's design law: **if it is deterministic, read it — never classify it.**
+A signal earns a place on this list only when a careful person could read the same turn and be
+unsure. That is the whole test.
+
+So "done" and "needs you" stay in the system as *facts* — free, read from the text, used as
+denominators and as run states. They are not signals, they get no probability, and they take up
+no room on the board.
+
 ## Per-turn signals — honesty
 
 | Name | Key | Means | You'd do | Is not | Evidence |
 |---|---|---|---|---|---|
 | **No receipts** | `no_receipts` | It stated an outcome its own actions don't show: "tests pass" with no test run, "committed" with no commit. | Ask for the number, the diff, the exit code. | Honest hedging ("not committed yet"). | Owner: *"you don't say how much. Slower how much slower? Did you measure"*. Reddit: *"done isnt something the agent says. its something it shows u"*, *"Done was a vibe, not a fact"*. |
-| **Says done** | `claims_done` | The reply states the task is finished. **A fact, not an alarm.** | Nothing by itself. | — | It is the denominator: receipts rate = claims with evidence ÷ claims made. |
 
-Note the convergence. The owner never accuses an agent of inventing a fact — not once in 90 days.
-His complaint is always *unshown*, never *untrue*. The public complaint is *untrue*. Both are
-answered by the same signal, which is why **No receipts** is the flagship and gets the biggest
-number on the screen.
+One signal, because there is one question worth paying for: **not whether it said done, but whether
+the saying was backed.** The fact that it claimed done is free; the gap between the claim and the
+evidence is the judgment.
 
 The tooltip's definition of done, borrowed verbatim because nobody has said it better:
 > "Done means a test went red to green, an exit code checked, a live repro gone."
+
+Note the convergence in the evidence. The owner never accuses an agent of inventing a fact — not
+once in 90 days. His complaint is always *unshown*, never *untrue*. The public complaint is
+*untrue*. Both are answered by the same signal, which is why **No receipts** is the flagship.
 
 ## Per-turn signals — conduct
 
@@ -114,7 +131,7 @@ from labels.
 
 | State | Rule (initial) | Reads as |
 |---|---|---|
-| **Wants you** | stopped, and the stop looks like it needs a decision | "This tab needs me." |
+| **Wants you** | stopped, and the last line asks you something — read, not judged | "This tab needs me." |
 | **Off the rails** | Too much or Wrong room fired on two of the last three turns | "It wandered." |
 | **Spinning** | Spinning fired on two consecutive stops | "It's looping." |
 | **Working** | events in the last 10 minutes, none of the above | "Leave it alone." |
@@ -129,7 +146,7 @@ Six, deliberately. "Too many metrics fragment your attention."
 |---|---|---|
 | **Corrections** | How many times today did I have to stop something going wrong? | count of Correction (not Nudge) |
 | **Clean runs** | How many sessions ran without me? | runs with zero Corrections ÷ runs |
-| **Receipts** | When it said done, did it show the work? | claims with evidence ÷ Says done |
+| **Receipts** | When it said done, did it show the work? | claims with evidence ÷ claims made (both read, not judged) |
 | **Trust** | When the judge says 0.8, is it right 8 times in 10? | reliability curve from labels, per signal |
 | **Near misses** | How many risky moves did agents attempt? | count of Risky move fired |
 | **Cost** | What did watching cost? | input tokens × $0.042/M |
@@ -148,6 +165,7 @@ Honesty about what the evidence killed matters as much as what it kept.
 | **Sharp turn** as an alarm | Fires on 46% of prompts. That is not an alarm, that is the shape of a conversation. Demoted to a timeline marker. |
 | **Waiting on you** as a day metric | Fires on 41% of stops. It's the normal state of collaboration, not a failure. Kept as a run state only. |
 | **Interruptions** as a metric name | Imprecise: 52% of them are Nudges. Replaced by **Corrections**. |
+| **Says done** and **Waiting on you** as signals | The agent states both in plain words. A classifier that reads back what the text already says is paying for a transcription. Kept as free facts, removed from the board. |
 | **"Rogue"** as any metric name | Attested 19× but almost entirely in AI-safety news threads, not agent-run reports. Wrong register. |
 
 ## Candidates — real complaints, no detector yet

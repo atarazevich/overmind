@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overmind — dashboard board v2 · reset round 1</title>
+<!--
+PROVENANCE · design board for issue #11 · direction reset #2 ("the board must tell a story")
+Reset round 1 · 2026-09-17 · supersedes docs/design/prototypes/dashboard.html (critic 7/10),
+which is left in place. Its layout is NOT a base: the information architecture changed.
+Carried over from it, and only this: the :root tokens, the font stack, and the relative
+Plotly vendoring path ../../../overmind/static/vendor/plotly.min.js (plotly.js 2.35.2, MIT),
+so the board opens offline from file:// and the built page serves the same file.
+
+WHAT THIS BOARD DECIDES
+  The screen is three bands stacked on one clock. Band 1 "Today" is six numbers. Bands 2
+  "Runs" and 3 "Parameters" are one Plotly figure with two shared-x subplots, so the
+  vertical rule at an owner message runs from the top of band 2 to the bottom of band 3 on
+  a single line, and a hover crosshair does the same.
+
+DATA · every number on this page is computed from real files. Nothing is invented.
+  A. ~/Library/Application Support/Overmind/events.jsonl, snapshotted at 650 lines
+     (2026-09-17 19:14:49 -> 20:59:09 UTC; shown in Europe/Lisbon = UTC+1, so 20:14 -> 21:59).
+     The log is live and was 436 lines when the ticket was written; it had grown to 650 by
+     the time this board was drawn. The header states the snapshot size for that reason.
+     Derivation script: scratchpad/prep.py (stdlib only, pure pass over the JSONL).
+  B. ~/.claude/sessions/*.json for run names (name, cwd, sessionId). Five of six resolved.
+     The sixth (39ea06c7, cwd tmp) has no session file, so it shows its id prefix — that is
+     the real fallback, not a placeholder. 32025.json is a torn write (trailing bytes after
+     the closing brace); its name was read from the valid prefix.
+  C. docs/research/own-transcripts.md for the 90-day numbers. Every tile fed from there is
+     tagged "90 days" on its face, per the ticket: never smooth over the provenance split.
+  D. labels.jsonl does not exist. Trust is therefore genuinely empty, not stubbed.
+
+THE SCHEMA QUIRK, HANDLED IN THE OPEN
+  The log carries the OLD question keys; docs/signals.md defines the NEW names. Mapping used:
+     risky -> Risky move   stuck -> Spinning   claims_done -> Says done   drifting -> Too much
+     needs_owner -> feeds the run state "Wants you" (signals.md: "stopped, and the stop looks
+        like it needs a decision"); it is not drawn as a per-turn signal because the new
+        contract does not list it as one.
+     sharp_turn -> a timeline marker, exactly as signals.md demotes it. It is what makes a
+        vertical rule solid rather than faint.
+     needs_parent_decision -> 202 answers, 10 fires, and NO name in docs/signals.md. It is
+        not drawn and not renamed: inventing a name would break the copy contract. Stated in
+        the footer so the omission is visible rather than silent.
+  Eight names in signals.md have no detector yet (No receipts, Wrong room, Jumped, Lost you,
+  Missed the point, Yap, Rule dropped, Burn). They hold their slot in the roster strip,
+  greyed, reading "no data yet". Spinning is a different empty: it HAS a detector and fired
+  0 of 29 times today, so it reads "0 of 29" and keeps ink. The board has to be right on day
+  one and in a month; the difference between those two empties is the design problem.
+
+COPY · docs/signals.md is the contract. Every metric name, every "Means" sentence and every
+  "You'd do" line in a tooltip is quoted from it or is arithmetic. No metric was invented or
+  reworded. "You" as a lane label and "Today / Runs / Parameters" as band titles are the
+  ticket's own words, not metric names.
+
+COLOUR · two in the charts, per the ticket. --alert for anything that wants a decision
+  (Wants you, Off the rails, Risky move, Too much, Spinning, a Sharp turn rule) and grey for
+  everything else. The split is not arbitrary: signals.md calls Says done "A fact, not an
+  alarm", so Says done is grey by the contract's own words. Identity is carried by marker
+  shape and lane row, never by hue. The round-3 seven-hue palette is deleted from :root.
+
+SORT · lanes are ordered Wants you, Off the rails, Spinning, Working, Idle; within Wants you,
+  longest wait first. Row one therefore both IS the run that wants you and is inked as such.
+
+TOOLTIPS · one component, used by the six tiles and by every Plotly element, so a tooltip
+  looks the same wherever it comes from. Exactly three lines: what it means / the arithmetic
+  with the real numbers substituted / what you would do, or "Nothing" when that is honest.
+
+DELIBERATE DEVIATION FROM THE TICKET (one)
+  The ticket specifies hovermode: "x unified". This board uses hovermode "closest" plus a
+  paper-height crosshair shape redrawn on every hover. Reason: in unified mode Plotly stacks
+  every lane trace crossing that instant into one label — six lanes x three lines = eighteen
+  lines — which destroys the three-line tooltip contract the owner asked for by name twice.
+  The crosshair shape delivers the mechanic the unified mode was wanted for (one vertical
+  line through both bands) without the cost. Named in the returned note.
+
+OPEN, AND LEFT OPEN ON PURPOSE
+  Corrections and Clean runs cannot be computed from schema v1: both need the interrupt
+  marker, which the hook does not write. Their tiles carry the 90-day figure, tagged. If the
+  owner wants a today number there, schema v2 has to log the interrupt marker and the
+  register of the next message. That is a product decision, not a drawing decision.
+-->
+<style>
+:root {
+  /* carried verbatim from dashboard.html */
+  --bg: #ffffff;
+  --ink: #0f1114;
+  --dim: #6b7280;
+  --faint: #9ca3af;
+  --line: #e5e7eb;
+  --hover: #f5f6f8;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --neutral-bar: #8b93a1;
+  --alert: #b3261e;
+  /* the seven-hue signal palette of round 3 is deleted: the chart is two colours */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font: 13px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { width: 1440px; height: 900px; margin: 0 auto; padding: 14px 26px 10px; display: flex; flex-direction: column; }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); }
+
+header { display: flex; align-items: baseline; gap: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+header .mark { font-size: 12px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink); }
+header .sum { font-size: 12px; color: var(--dim); }
+header .sum b { font-weight: 600; color: var(--ink); }
+header .right { margin-left: auto; font-size: 11px; color: var(--faint); }
+
+/* --- band titles outrank everything below them --- */
+.bandhead { display: flex; align-items: baseline; gap: 12px; margin: 11px 0 7px; }
+.band { font-size: 19px; font-weight: 650; letter-spacing: -.015em; margin: 0; line-height: 1; }
+.bandsub { font-size: 11.5px; color: var(--dim); }
+.bandsub b { font-weight: 600; color: var(--ink); }
+
+/* --- band 1 --- */
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line);
+         border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.tile { background: var(--bg); padding: 9px 13px 8px; cursor: help; display: flex; flex-direction: column; min-height: 96px; }
+.tile:hover { background: var(--hover); }
+.tile .k { font-size: 10px; font-weight: 600; letter-spacing: .085em; text-transform: uppercase; color: var(--dim); }
+.tile .v { font-size: 36px; font-weight: 600; line-height: 1.14; letter-spacing: -.028em; margin-top: 5px; }
+.tile .v .unit { font-size: 19px; font-weight: 500; letter-spacing: 0; color: var(--dim); }
+.tile.empty .v { color: var(--faint); font-weight: 400; }
+.tile .m { font-size: 11px; color: var(--dim); line-height: 1.32; margin-top: 4px; }
+.tile .src { margin-top: auto; padding-top: 5px; font-size: 9.5px; font-weight: 600; letter-spacing: .07em;
+             text-transform: uppercase; color: var(--faint); }
+.tile .src.mine { color: var(--dim); }
+
+/* --- roster strip --- */
+.roster { display: flex; gap: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.chip { padding: 5px 0; font-size: 11px; color: var(--ink); cursor: help; white-space: nowrap; flex: 0 0 auto;
+        padding-right: 17px; margin-right: 17px; border-right: 1px solid var(--line); }
+.chip:last-child { border-right: 0; }
+.chip .n { font-variant-numeric: tabular-nums; color: var(--dim); margin-left: 5px; }
+.chip.off { color: var(--faint); }
+.chip.lead { font-size: 9.5px; font-weight: 600; letter-spacing: .085em; text-transform: uppercase; color: var(--faint);
+             cursor: default; padding-right: 13px; margin-right: 13px; }
+.chip.nob { border-right: 0; padding-right: 0; margin-right: 0; }
+.chip.nob .dark { cursor: help; }
+.chip.nob .dark:hover { color: var(--dim); }
+.chip.nob s { text-decoration: none; color: var(--line); padding: 0 1px; }
+.chip.off .n { color: var(--faint); }
+.chip:hover { color: var(--ink); }
+
+/* --- plot --- */
+#stage { position: relative; flex: 1 1 auto; }
+#plot { width: 1388px; height: 556px; }
+.overtitle { position: absolute; left: 0; display: flex; align-items: baseline; gap: 12px; pointer-events: none; }
+.swatch { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dim); }
+.swatch i { display: inline-block; width: 13px; height: 0; border-top-width: 2px; border-top-style: solid; }
+
+footer { border-top: 1px solid var(--line); padding-top: 6px; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
+footer b { font-weight: 600; color: var(--dim); }
+
+/* --- the one tooltip, used by tiles, chips and every chart element --- */
+#tip { position: fixed; z-index: 99; width: 336px; background: var(--bg); border: 1px solid var(--ink);
+       box-shadow: 0 6px 20px rgba(15,17,20,.14); padding: 9px 11px 8px; display: none; pointer-events: none; }
+#tip .t1 { font-size: 12px; line-height: 1.38; color: var(--ink); }
+#tip .t2 { font-family: var(--mono); font-size: 11px; line-height: 1.42; color: var(--ink);
+           background: var(--hover); border-left: 2px solid var(--neutral-bar); padding: 5px 7px; margin: 6px 0; }
+#tip .t2.hot { border-left-color: var(--alert); }
+#tip .t3 { font-size: 11.5px; line-height: 1.36; color: var(--dim); }
+#tip .t3 b { font-weight: 600; color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="mark">Overmind</span>
+    <span class="sum"><b>6 runs</b> today &nbsp;·&nbsp; <b>3</b> want you &nbsp;·&nbsp; <b>1</b> off the rails &nbsp;·&nbsp; 650 events judged by jev-1.13.0</span>
+    <span class="right">20:14 – 21:59 Europe/Lisbon &nbsp;·&nbsp; snapshot of events.jsonl at 650 lines, 2026-09-17</span>
+  </header>
+  <div class="bandhead"><h2 class="band">Today</h2><span class="bandsub">Six numbers, and what each one is still waiting for. <b>Two</b> come from today&rsquo;s 650 events, <b>two</b> from the 90-day transcript mine, <b>two</b> have no detector yet.</span></div>
+  <div class="tiles">
+    <div class="tile" data-t1="How many times you had to stop something that was going wrong. The ground-truth negative." data-t2="90 days: 46 interruptions, hand-classified &rarr; 22 Corrections + 24 Nudges. 24 of 101 sessions, 4.0 per 1,000 assistant turns. Today: 0 of 650 events carry an interrupt marker, so it cannot be counted from the log." data-t3="Nothing to the number. Every Correction is a labelled negative nobody had to ask you for &mdash; it is what draws the Trust curve." data-hot="0"><div class="k">Corrections</div><div class="v num">22</div><div class="m">Times you stopped a run because it was going wrong.</div><div class="src mine">90 days · transcripts</div></div>
+    <div class="tile" data-t1="How many sessions ran without you." data-t2="90 days: 5 of 44 sessions with 5 or more human messages had zero interruptions and zero correction language = 11%. Today: needs Corrections, which needs the interrupt marker." data-t3="Two consecutive clean runs is what promotes a capability to trusted." data-hot="0"><div class="k">Clean runs</div><div class="v num">11<span class="unit">%</span></div><div class="m">Sessions that ran without you correcting them.</div><div class="src mine">90 days · transcripts</div></div>
+    <div class="tile empty" data-t1="When it said done, did it show the work." data-t2="claims with evidence &divide; Says done = ? &divide; 16. The denominator is real: Says done fired 16 of 231 replies today (6.9%). The numerator needs No receipts, which has no detector yet." data-t3="Ask for the number, the diff, the exit code. &ldquo;Done means a test went red to green, an exit code checked, a live repro gone.&rdquo;" data-hot="0"><div class="k">Receipts</div><div class="v num">&mdash;</div><div class="m">Of 16 Says done today, how many showed the work.</div><div class="src ">no data yet</div></div>
+    <div class="tile empty" data-t1="When the judge says 0.8, is it right 8 times in 10." data-t2="labels.jsonl does not exist. jev-1.13.0 answered 939 questions across 650 events today, every one of them unlabelled. The curve needs 20 labels for a signal before it can be drawn." data-t3="Press y or n on a fired signal. Nothing else fills this." data-hot="0"><div class="k">Trust</div><div class="v num">&mdash;</div><div class="m">No labels on file yet. Needs 20 for one signal.</div><div class="src ">no data yet</div></div>
+    <div class="tile" data-t1="How many hard-or-impossible-to-undo commands agents tried to run." data-t2="Risky move fired on 36 of 386 tool calls judged today = 9.3%. Highest single score 0.91." data-t3="Today, notice. In phase 3 you would decide before it runs." data-hot="0"><div class="k">Near misses</div><div class="v num">36</div><div class="m">Risky moves agents attempted today.</div><div class="src ">today · event log</div></div>
+    <div class="tile" data-t1="What running the judge over your day cost." data-t2="408,704 input tokens &times; $0.042 per million = $0.0172 = 1.7&cent;. 939 judgements, p50 968 ms, p90 1,091 ms." data-t3="Nothing. A full day of watching costs a few cents." data-hot="0"><div class="k">Cost</div><div class="v num">1.7<span class="unit">&cent;</span></div><div class="m">What watching cost you today.</div><div class="src ">today · event log</div></div>
+  </div>
+  <div class="bandhead"><h2 class="band">Runs</h2><span class="bandsub">One lane per session on the clock. <span style="color:var(--alert)">Red</span> = it wants you, or it went off the rails; the pale tail is how long it has been holding. Dots = signals that fired. A rule through both bands = a message of yours the judge called a <b>Sharp turn</b>.</span></div>
+  <div class="roster">
+    <div class="chip" data-t1="The command it is about to run is hard or impossible to undo." data-t2="Fired 36 of 386 answers today = 9.3%." data-t3="Decide before it runs (phase 3); today, notice." data-hot="1">Risky move<span class="n">36 of 386</span></div>
+    <div class="chip" data-t1="The reply states the task is finished. A fact, not an alarm." data-t2="Fired 16 of 231 answers today = 6.9%." data-t3="Nothing by itself. It is the denominator: receipts rate = claims with evidence &divide; Says done." data-hot="0">Says done<span class="n">16 of 231</span></div>
+    <div class="chip" data-t1="It did more than you asked &mdash; extra files, extra features, a refactor nobody ordered." data-t2="Fired 12 of 29 answers today = 41.4%." data-t3="Pull it back." data-hot="1">Too much<span class="n">12 of 29</span></div>
+    <div class="chip" data-t1="Repeating a failing attempt without new information." data-t2="Fired 0 of 29 answers today = 0.0%. Zero fires in the owner&rsquo;s data so far &mdash; kept because the public evidence is overwhelming, but it is on probation." data-t3="Step in; change the approach." data-hot="1">Spinning<span class="n">0 of 29</span></div>
+    <div class="chip lead">No detector yet</div>
+    <div class="chip off nob"><span class="dark" data-t1="It stated an outcome its own actions do not show: &ldquo;tests pass&rdquo; with no test run, &ldquo;committed&rdquo; with no commit." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Ask for the number, the diff, the exit code." data-hot="0">No receipts</span> <s>&middot;</s> <span class="dark" data-t1="It touched something outside the task." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Stop it before the next write." data-hot="0">Wrong room</span> <s>&middot;</s> <span class="dark" data-t1="You asked a question; it started doing work instead of answering." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Say &ldquo;answer, don&rsquo;t act&rdquo;." data-hot="0">Jumped</span> <s>&middot;</s> <span class="dark" data-t1="You can no longer tell what it is doing or where it is." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Ask for status; consider stopping." data-hot="0">Lost you</span> <s>&middot;</s> <span class="dark" data-t1="It is solving a different problem than the one you have." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Restate the point, once." data-hot="0">Missed the point</span> <s>&middot;</s> <span class="dark" data-t1="The reply is long where a line would do." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Nothing; it is a cost, not a fault." data-hot="0">Yap</span> <s>&middot;</s> <span class="dark" data-t1="It did something the project&rsquo;s rules forbid, without saying it was doing so." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Decide whether the rule or the behaviour is wrong." data-hot="0">Rule dropped</span> <s>&middot;</s> <span class="dark" data-t1="Money or quota going out with nothing coming back." data-t2="No detector yet. Not one of the 650 events carries an answer to this question, so the slot stays empty rather than faking a series." data-t3="Cap it." data-hot="0">Burn</span></div>
+  </div>
+  <div id="stage">
+    <div id="plot"></div>
+  </div>
+  <footer><b>Provenance.</b> Every figure above is computed, not typed. Today: a 650-line snapshot of <span class="mono">~/Library/Application Support/Overmind/events.jsonl</span> run names from <span class="mono">~/.claude/sessions/*.json</span>. 90 days: <span class="mono">docs/research/own-transcripts.md</span> &mdash; 106 sessions, 764 human messages, 11,594 assistant turns. Names from <span class="mono">docs/signals.md</span>. <b>Not drawn:</b> the log also answers <span class="mono">needs_parent_decision</span> 10 times of 202 &mdash; that key has no name in signals.md, and naming it here would be an invention. <span class="mono">labels.jsonl</span> does not exist, so Trust is empty rather than stubbed.</footer>
+</div>
+<div id="tip"><div class="t1"></div><div class="t2 mono"></div><div class="t3"></div></div>
+<script src="../../../overmind/static/vendor/plotly.min.js"></script>
+<script>
+const DATA = {"meta":{"events":650,"runs":6,"tz":"Europe/Lisbon (UTC+1)","t0":"2026-09-17 20:14:49.397","t1":"2026-09-17 21:59:09.900","now":"2026-09-17 21:59:17.900","tokens":408704,"cents":1.72,"model":"jev-1.13.0","ms_p50":968,"ms_p90":1091},"q":{"claims_done":{"fired":16,"asked":231},"needs_parent_decision":{"fired":10,"asked":202},"risky":{"fired":36,"asked":386},"sharp_turn":{"fired":16,"asked":33},"needs_owner":{"fired":11,"asked":29},"drifting":{"fired":12,"asked":29},"stuck":{"fired":0,"asked":29}},"runs":[{"sid":"7d74215c-3d5a-4142-a2fa-265b507a0f26","name":"lore say","cwd":"voice","state":"Wants you","why":"last stop 20:44 scored 0.96 on a stop that needs a decision; you have not answered it","t0":"2026-09-17 20:14:49.397","t1":"2026-09-17 21:06:04.528","n":85,"gap":53.2,"stops":4,"prompts":4,"tokens":50611,"fires":{"risky":8,"claims_done":5,"sharp_turn":2,"needs_owner":2,"drifting":2,"needs_parent_decision":2},"lastStop":"2026-09-17 20:44:17.887","lastStopNO":0.96,"row":0,"segs":[{"t0":"2026-09-17 20:14:49.397","t1":"2026-09-17 20:17:09.395","state":"Working","note":""},{"t0":"2026-09-17 20:17:09.395","t1":"2026-09-17 20:17:23.532","state":"Working","note":""},{"t0":"2026-09-17 20:17:23.532","t1":"2026-09-17 20:29:49.021","state":"Working","note":""},{"t0":"2026-09-17 20:29:49.021","t1":"2026-09-17 20:34:04.963","state":"Working","note":""},{"t0":"2026-09-17 20:34:04.963","t1":"2026-09-17 20:34:22.999","state":"Wants you","note":""},{"t0":"2026-09-17 20:34:22.999","t1":"2026-09-17 20:34:38.728","state":"Working","note":""},{"t0":"2026-09-17 20:34:38.728","t1":"2026-09-17 20:35:42.981","state":"Working","note":""},{"t0":"2026-09-17 20:35:42.981","t1":"2026-09-17 20:44:17.887","state":"Working","note":""},{"t0":"2026-09-17 20:44:17.887","t1":"2026-09-17 21:06:04.528","state":"Wants you","note":""},{"t0":"2026-09-17 21:06:04.528","t1":"2026-09-17 21:59:17.900","state":"Wants you","note":"waiting"}]},{"sid":"d5277c9c-e509-45e9-94c2-d6b984f4175d","name":"voice-1f","cwd":"voice","state":"Wants you","why":"last stop 20:45 scored 0.96 on a stop that needs a decision; you have not answered it","t0":"2026-09-17 20:38:30.125","t1":"2026-09-17 21:06:11.732","n":82,"gap":53.1,"stops":4,"prompts":4,"tokens":52189,"fires":{"sharp_turn":2,"needs_owner":1,"drifting":1,"needs_parent_decision":2},"lastStop":"2026-09-17 20:45:05.065","lastStopNO":0.96,"row":1,"segs":[{"t0":"2026-09-17 20:38:30.125","t1":"2026-09-17 20:40:09.404","state":"Working","note":""},{"t0":"2026-09-17 20:40:09.404","t1":"2026-09-17 20:41:33.838","state":"Working","note":""},{"t0":"2026-09-17 20:41:33.838","t1":"2026-09-17 20:41:36.663","state":"Working","note":""},{"t0":"2026-09-17 20:41:36.663","t1":"2026-09-17 20:42:39.264","state":"Working","note":""},{"t0":"2026-09-17 20:42:39.264","t1":"2026-09-17 20:42:42.108","state":"Working","note":""},{"t0":"2026-09-17 20:42:42.108","t1":"2026-09-17 20:43:46.070","state":"Working","note":""},{"t0":"2026-09-17 20:43:46.070","t1":"2026-09-17 20:45:05.065","state":"Working","note":""},{"t0":"2026-09-17 20:45:05.065","t1":"2026-09-17 21:06:11.732","state":"Wants you","note":""},{"t0":"2026-09-17 21:06:11.732","t1":"2026-09-17 21:59:17.900","state":"Wants you","note":"waiting"}]},{"sid":"056965b2-08b2-4118-8ad8-d7436f7f8bf2","name":"voice-dictation-intent","cwd":"voice","state":"Wants you","why":"last stop 21:20 scored 0.79 on a stop that needs a decision; you have not answered it","t0":"2026-09-17 20:30:01.387","t1":"2026-09-17 21:23:20.195","n":7,"gap":36.0,"stops":2,"prompts":2,"tokens":6479,"fires":{"needs_owner":1,"drifting":1},"lastStop":"2026-09-17 21:20:15.554","lastStopNO":0.79,"row":2,"segs":[{"t0":"2026-09-17 20:30:01.387","t1":"2026-09-17 20:30:51.839","state":"Working","note":""},{"t0":"2026-09-17 20:30:51.839","t1":"2026-09-17 21:19:26.664","state":"Working","note":""},{"t0":"2026-09-17 21:19:26.664","t1":"2026-09-17 21:20:15.554","state":"Working","note":""},{"t0":"2026-09-17 21:20:15.554","t1":"2026-09-17 21:23:20.195","state":"Wants you","note":""},{"t0":"2026-09-17 21:23:20.195","t1":"2026-09-17 21:59:17.900","state":"Wants you","note":"waiting"}]},{"sid":"cfecebc6-a5a3-4f72-a741-871e0fec326c","name":"claude-a8","cwd":".claude","state":"Off the rails","why":"Too much fired on 2 of the last 3 stops \u2014 21:14 0.50, 21:22 0.34, 21:58 0.64","t0":"2026-09-17 20:14:54.763","t1":"2026-09-17 21:59:09.900","n":458,"gap":0.1,"stops":16,"prompts":18,"tokens":289550,"fires":{"risky":23,"claims_done":9,"sharp_turn":10,"needs_owner":6,"drifting":7,"needs_parent_decision":5},"lastStop":"2026-09-17 21:58:53.727","lastStopNO":0.1,"row":3,"segs":[{"t0":"2026-09-17 20:14:54.763","t1":"2026-09-17 20:15:46.773","state":"Working","note":""},{"t0":"2026-09-17 20:15:46.773","t1":"2026-09-17 20:22:27.060","state":"Working","note":""},{"t0":"2026-09-17 20:22:27.060","t1":"2026-09-17 20:22:52.248","state":"Working","note":""},{"t0":"2026-09-17 20:22:52.248","t1":"2026-09-17 20:23:32.201","state":"Working","note":""},{"t0":"2026-09-17 20:23:32.201","t1":"2026-09-17 20:24:03.120","state":"Working","note":""},{"t0":"2026-09-17 20:24:03.120","t1":"2026-09-17 20:25:03.082","state":"Working","note":""},{"t0":"2026-09-17 20:25:03.082","t1":"2026-09-17 20:25:10.113","state":"Working","note":""},{"t0":"2026-09-17 20:25:10.113","t1":"2026-09-17 20:25:11.471","state":"Working","note":""},{"t0":"2026-09-17 20:25:11.471","t1":"2026-09-17 20:25:17.019","state":"Working","note":""},{"t0":"2026-09-17 20:25:17.019","t1":"2026-09-17 20:25:31.657","state":"Working","note":""},{"t0":"2026-09-17 20:25:31.657","t1":"2026-09-17 20:26:12.806","state":"Working","note":""},{"t0":"2026-09-17 20:26:12.996","t1":"2026-09-17 20:27:16.908","state":"Working","note":""},{"t0":"2026-09-17 20:27:16.908","t1":"2026-09-17 20:30:41.918","state":"Wants you","note":""},{"t0":"2026-09-17 20:30:41.918","t1":"2026-09-17 20:31:36.805","state":"Working","note":""},{"t0":"2026-09-17 20:31:36.805","t1":"2026-09-17 20:38:04.514","state":"Off the rails","note":""},{"t0":"2026-09-17 20:38:04.514","t1":"2026-09-17 20:39:25.285","state":"Working","note":""},{"t0":"2026-09-17 20:39:25.285","t1":"2026-09-17 20:39:50.577","state":"Working","note":""},{"t0":"2026-09-17 20:39:50.577","t1":"2026-09-17 20:43:32.703","state":"Wants you","note":""},{"t0":"2026-09-17 20:43:32.703","t1":"2026-09-17 20:44:04.567","state":"Working","note":""},{"t0":"2026-09-17 20:44:04.567","t1":"2026-09-17 20:45:08.102","state":"Wants you","note":""},{"t0":"2026-09-17 20:45:08.102","t1":"2026-09-17 20:45:43.509","state":"Working","note":""},{"t0":"2026-09-17 20:45:43.509","t1":"2026-09-17 20:49:34.231","state":"Wants you","note":""},{"t0":"2026-09-17 20:49:34.231","t1":"2026-09-17 20:49:53.172","state":"Working","note":""},{"t0":"2026-09-17 20:49:53.172","t1":"2026-09-17 20:51:32.667","state":"Wants you","note":""},{"t0":"2026-09-17 20:51:32.667","t1":"2026-09-17 20:51:47.170","state":"Working","note":""},{"t0":"2026-09-17 20:51:47.170","t1":"2026-09-17 21:07:00.954","state":"Wants you","note":""},{"t0":"2026-09-17 21:07:00.954","t1":"2026-09-17 21:10:09.637","state":"Working","note":""},{"t0":"2026-09-17 21:10:09.637","t1":"2026-09-17 21:14:12.337","state":"Working","note":""},{"t0":"2026-09-17 21:14:12.337","t1":"2026-09-17 21:14:34.688","state":"Working","note":""},{"t0":"2026-09-17 21:14:34.688","t1":"2026-09-17 21:21:55.013","state":"Off the rails","note":""},{"t0":"2026-09-17 21:21:55.013","t1":"2026-09-17 21:22:19.162","state":"Working","note":""},{"t0":"2026-09-17 21:22:19.162","t1":"2026-09-17 21:52:25.319","state":"Off the rails","note":""},{"t0":"2026-09-17 21:52:25.319","t1":"2026-09-17 21:58:53.727","state":"Working","note":""},{"t0":"2026-09-17 21:58:53.727","t1":"2026-09-17 21:59:09.900","state":"Off the rails","note":""}]},{"sid":"849911a8-0aff-4723-b5d5-0061a80759e3","name":"claude-ec","cwd":".claude","state":"Idle","why":"no events for 39 minutes","t0":"2026-09-17 21:07:49.381","t1":"2026-09-17 21:20:38.464","n":16,"gap":38.7,"stops":2,"prompts":4,"tokens":8850,"fires":{"needs_owner":1,"drifting":1,"sharp_turn":2,"risky":5,"claims_done":2,"needs_parent_decision":1},"lastStop":"2026-09-17 21:17:33.513","lastStopNO":0.03,"row":4,"segs":[{"t0":"2026-09-17 21:07:49.381","t1":"2026-09-17 21:15:10.880","state":"Working","note":""},{"t0":"2026-09-17 21:15:10.880","t1":"2026-09-17 21:15:22.630","state":"Working","note":""},{"t0":"2026-09-17 21:15:22.630","t1":"2026-09-17 21:15:54.564","state":"Wants you","note":""},{"t0":"2026-09-17 21:15:54.564","t1":"2026-09-17 21:16:14.783","state":"Working","note":""},{"t0":"2026-09-17 21:16:14.783","t1":"2026-09-17 21:17:33.513","state":"Working","note":""},{"t0":"2026-09-17 21:17:33.513","t1":"2026-09-17 21:20:38.464","state":"Working","note":""},{"t0":"2026-09-17 21:20:38.464","t1":"2026-09-17 21:59:17.900","state":"Idle","note":""}]},{"sid":"39ea06c7-359c-4a94-8f07-3d7022ccfd5b","name":"39ea06c7","cwd":"tmp","state":"Idle","why":"no events for 104 minutes","t0":"2026-09-17 20:15:01.584","t1":"2026-09-17 20:15:02.820","n":2,"gap":104.3,"stops":1,"prompts":1,"tokens":1025,"fires":{},"lastStop":"2026-09-17 20:15:02.820","lastStopNO":0.02,"row":5,"segs":[{"t0":"2026-09-17 20:15:01.584","t1":"2026-09-17 20:15:02.820","state":"Working","note":""},{"t0":"2026-09-17 20:15:02.820","t1":"2026-09-17 21:59:17.900","state":"Idle","note":""}]}],"dots":[{"row":0,"t":"2026-09-17 20:16:05.725","sig":"Risky move","p":0.72,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:17:07.940","sig":"Says done","p":0.97,"ev":"SubagentStop","tool":null,"run":"lore say"},{"row":0,"t":"2026-09-17 20:17:23.532","sig":"Says done","p":0.67,"ev":"Stop","tool":null,"run":"lore say"},{"row":0,"t":"2026-09-17 20:18:57.012","sig":"Risky move","p":0.66,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:19:15.176","sig":"Risky move","p":0.91,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:29:47.518","sig":"Says done","p":0.97,"ev":"SubagentStop","tool":null,"run":"lore say"},{"row":0,"t":"2026-09-17 20:30:05.877","sig":"Risky move","p":0.7,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:30:22.387","sig":"Risky move","p":0.76,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:30:39.659","sig":"Risky move","p":0.55,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:32:57.543","sig":"Risky move","p":0.79,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:33:44.311","sig":"Risky move","p":0.84,"ev":"PreToolUse","tool":"Bash","run":"lore say"},{"row":0,"t":"2026-09-17 20:34:04.963","sig":"Says done","p":0.85,"ev":"Stop","tool":null,"run":"lore say"},{"row":0,"t":"2026-09-17 20:34:04.963","sig":"Too much","p":0.52,"ev":"Stop","tool":null,"run":"lore say"},{"row":0,"t":"2026-09-17 20:34:38.728","sig":"Says done","p":0.69,"ev":"Stop","tool":null,"run":"lore say"},{"row":0,"t":"2026-09-17 20:44:17.887","sig":"Too much","p":0.55,"ev":"Stop","tool":null,"run":"lore say"},{"row":1,"t":"2026-09-17 20:45:05.065","sig":"Too much","p":0.69,"ev":"Stop","tool":null,"run":"voice-1f"},{"row":2,"t":"2026-09-17 21:20:15.554","sig":"Too much","p":0.72,"ev":"Stop","tool":null,"run":"voice-dictation-intent"},{"row":3,"t":"2026-09-17 20:20:41.327","sig":"Risky move","p":0.62,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:20:58.813","sig":"Risky move","p":0.7,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:21:17.096","sig":"Risky move","p":0.59,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:21:40.078","sig":"Says done","p":0.5,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:22:22.023","sig":"Risky move","p":0.72,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:22:25.102","sig":"Says done","p":0.96,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:22:47.985","sig":"Risky move","p":0.68,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:23:30.445","sig":"Says done","p":0.95,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:24:03.120","sig":"Says done","p":0.69,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:25:30.006","sig":"Says done","p":0.75,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:27:16.908","sig":"Too much","p":0.6,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:28:43.285","sig":"Risky move","p":0.64,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:30:40.234","sig":"Says done","p":0.97,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:31:26.375","sig":"Risky move","p":0.58,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:31:36.805","sig":"Too much","p":0.55,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:38:33.081","sig":"Risky move","p":0.61,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:39:07.951","sig":"Risky move","p":0.65,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:39:50.577","sig":"Too much","p":0.51,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:42:03.834","sig":"Risky move","p":0.66,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:42:50.239","sig":"Risky move","p":0.67,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:43:31.214","sig":"Says done","p":0.71,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:43:54.719","sig":"Risky move","p":0.77,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:45:43.509","sig":"Too much","p":0.54,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 20:48:29.032","sig":"Risky move","p":0.71,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 20:48:59.621","sig":"Risky move","p":0.64,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:10:09.637","sig":"Too much","p":0.5,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 21:14:34.688","sig":"Too much","p":0.5,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 21:18:56.687","sig":"Risky move","p":0.56,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:20:30.277","sig":"Risky move","p":0.78,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:20:47.762","sig":"Risky move","p":0.66,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:21:23.842","sig":"Risky move","p":0.58,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:21:53.308","sig":"Says done","p":0.78,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 21:36:54.079","sig":"Risky move","p":0.85,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:48:55.099","sig":"Says done","p":0.95,"ev":"SubagentStop","tool":null,"run":"claude-a8"},{"row":3,"t":"2026-09-17 21:54:52.867","sig":"Risky move","p":0.5,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:56:56.447","sig":"Risky move","p":0.72,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:57:04.424","sig":"Risky move","p":0.69,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:57:53.790","sig":"Risky move","p":0.5,"ev":"PreToolUse","tool":"Bash","run":"claude-a8"},{"row":3,"t":"2026-09-17 21:58:53.727","sig":"Too much","p":0.64,"ev":"Stop","tool":null,"run":"claude-a8"},{"row":4,"t":"2026-09-17 21:15:22.630","sig":"Too much","p":0.65,"ev":"Stop","tool":null,"run":"claude-ec"},{"row":4,"t":"2026-09-17 21:16:30.239","sig":"Risky move","p":0.92,"ev":"PreToolUse","tool":"Bash","run":"claude-ec"},{"row":4,"t":"2026-09-17 21:16:43.774","sig":"Risky move","p":0.76,"ev":"PreToolUse","tool":"Bash","run":"claude-ec"},{"row":4,"t":"2026-09-17 21:17:00.891","sig":"Risky move","p":0.78,"ev":"PreToolUse","tool":"Bash","run":"claude-ec"},{"row":4,"t":"2026-09-17 21:17:08.503","sig":"Risky move","p":0.9,"ev":"PreToolUse","tool":"Bash","run":"claude-ec"},{"row":4,"t":"2026-09-17 21:17:15.103","sig":"Risky move","p":0.94,"ev":"PreToolUse","tool":"Bash","run":"claude-ec"},{"row":4,"t":"2026-09-17 21:17:33.513","sig":"Says done","p":0.98,"ev":"Stop","tool":null,"run":"claude-ec"},{"row":4,"t":"2026-09-17 21:20:38.464","sig":"Says done","p":0.95,"ev":"SubagentStop","tool":null,"run":"claude-ec"}],"rules":[{"t":"2026-09-17 20:15:01.584","row":5,"run":"39ea06c7","sharp":0.07,"fired":false},{"t":"2026-09-17 20:17:09.395","row":0,"run":"lore say","sharp":0.07,"fired":false},{"t":"2026-09-17 20:22:27.060","row":3,"run":"claude-a8","sharp":0.09,"fired":false},{"t":"2026-09-17 20:23:32.201","row":3,"run":"claude-a8","sharp":0.74,"fired":true},{"t":"2026-09-17 20:25:03.082","row":3,"run":"claude-a8","sharp":0.86,"fired":true},{"t":"2026-09-17 20:25:11.471","row":3,"run":"claude-a8","sharp":0.18,"fired":false},{"t":"2026-09-17 20:25:31.657","row":3,"run":"claude-a8","sharp":0.77,"fired":true},{"t":"2026-09-17 20:26:12.806","row":3,"run":"claude-a8","sharp":0.6,"fired":true},{"t":"2026-09-17 20:26:12.996","row":3,"run":"claude-a8","sharp":0.89,"fired":true},{"t":"2026-09-17 20:29:49.021","row":0,"run":"lore say","sharp":0.56,"fired":true},{"t":"2026-09-17 20:30:01.387","row":2,"run":"voice-dictation-intent","sharp":0.12,"fired":false},{"t":"2026-09-17 20:30:41.918","row":3,"run":"claude-a8","sharp":0.61,"fired":true},{"t":"2026-09-17 20:34:22.999","row":0,"run":"lore say","sharp":0.4,"fired":false},{"t":"2026-09-17 20:35:42.981","row":0,"run":"lore say","sharp":0.82,"fired":true},{"t":"2026-09-17 20:38:04.514","row":3,"run":"claude-a8","sharp":0.69,"fired":true},{"t":"2026-09-17 20:38:30.125","row":1,"run":"voice-1f","sharp":0.05,"fired":false},{"t":"2026-09-17 20:39:25.285","row":3,"run":"claude-a8","sharp":0.2,"fired":false},{"t":"2026-09-17 20:41:33.838","row":1,"run":"voice-1f","sharp":0.25,"fired":false},{"t":"2026-09-17 20:42:39.264","row":1,"run":"voice-1f","sharp":0.55,"fired":true},{"t":"2026-09-17 20:43:32.703","row":3,"run":"claude-a8","sharp":0.12,"fired":false},{"t":"2026-09-17 20:43:46.070","row":1,"run":"voice-1f","sharp":0.72,"fired":true},{"t":"2026-09-17 20:45:08.102","row":3,"run":"claude-a8","sharp":0.25,"fired":false},{"t":"2026-09-17 20:49:34.231","row":3,"run":"claude-a8","sharp":0.13,"fired":false},{"t":"2026-09-17 20:51:32.667","row":3,"run":"claude-a8","sharp":0.18,"fired":false},{"t":"2026-09-17 21:07:00.954","row":3,"run":"claude-a8","sharp":0.78,"fired":true},{"t":"2026-09-17 21:07:49.381","row":4,"run":"claude-ec","sharp":0.07,"fired":false},{"t":"2026-09-17 21:14:12.337","row":3,"run":"claude-a8","sharp":0.26,"fired":false},{"t":"2026-09-17 21:15:10.880","row":4,"run":"claude-ec","sharp":0.13,"fired":false},{"t":"2026-09-17 21:15:54.564","row":4,"run":"claude-ec","sharp":0.74,"fired":true},{"t":"2026-09-17 21:16:14.783","row":4,"run":"claude-ec","sharp":0.69,"fired":true},{"t":"2026-09-17 21:19:26.664","row":2,"run":"voice-dictation-intent","sharp":0.26,"fired":false},{"t":"2026-09-17 21:21:55.013","row":3,"run":"claude-a8","sharp":0.85,"fired":true},{"t":"2026-09-17 21:52:25.319","row":3,"run":"claude-a8","sharp":0.85,"fired":true}],"cum":[{"t":"2026-09-17 20:14:49.397","nm":0,"sd":0,"cents":0.0019,"tok":445},{"t":"2026-09-17 20:15:11.391","nm":0,"sd":0,"cents":0.0217,"tok":5177},{"t":"2026-09-17 20:15:41.815","nm":0,"sd":0,"cents":0.0405,"tok":9654},{"t":"2026-09-17 20:16:05.725","nm":1,"sd":0,"cents":0.0576,"tok":13715},{"t":"2026-09-17 20:16:12.249","nm":1,"sd":0,"cents":0.0613,"tok":14601},{"t":"2026-09-17 20:16:53.496","nm":1,"sd":0,"cents":0.0821,"tok":19542},{"t":"2026-09-17 20:17:07.940","nm":1,"sd":1,"cents":0.0875,"tok":20828},{"t":"2026-09-17 20:17:23.532","nm":1,"sd":2,"cents":0.1023,"tok":24367},{"t":"2026-09-17 20:17:55.121","nm":1,"sd":2,"cents":0.1095,"tok":26083},{"t":"2026-09-17 20:18:47.975","nm":1,"sd":2,"cents":0.1283,"tok":30537},{"t":"2026-09-17 20:18:57.012","nm":2,"sd":2,"cents":0.1314,"tok":31280},{"t":"2026-09-17 20:19:15.176","nm":3,"sd":2,"cents":0.1388,"tok":33053},{"t":"2026-09-17 20:19:57.199","nm":3,"sd":2,"cents":0.1488,"tok":35423},{"t":"2026-09-17 20:20:41.327","nm":4,"sd":2,"cents":0.1648,"tok":39227},{"t":"2026-09-17 20:20:58.813","nm":5,"sd":2,"cents":0.1712,"tok":40771},{"t":"2026-09-17 20:21:05.329","nm":5,"sd":2,"cents":0.1731,"tok":41215},{"t":"2026-09-17 20:21:17.096","nm":6,"sd":2,"cents":0.1782,"tok":42417},{"t":"2026-09-17 20:21:40.078","nm":6,"sd":3,"cents":0.1845,"tok":43921},{"t":"2026-09-17 20:21:59.346","nm":6,"sd":3,"cents":0.1957,"tok":46585},{"t":"2026-09-17 20:22:22.023","nm":7,"sd":3,"cents":0.2043,"tok":48634},{"t":"2026-09-17 20:22:25.102","nm":7,"sd":4,"cents":0.2087,"tok":49682},{"t":"2026-09-17 20:22:47.985","nm":8,"sd":4,"cents":0.2168,"tok":51622},{"t":"2026-09-17 20:22:53.136","nm":8,"sd":4,"cents":0.2279,"tok":54273},{"t":"2026-09-17 20:23:01.516","nm":8,"sd":4,"cents":0.246,"tok":58580},{"t":"2026-09-17 20:23:11.956","nm":8,"sd":4,"cents":0.2647,"tok":63015},{"t":"2026-09-17 20:23:18.029","nm":8,"sd":4,"cents":0.2821,"tok":67173},{"t":"2026-09-17 20:23:30.445","nm":8,"sd":5,"cents":0.2964,"tok":70582},{"t":"2026-09-17 20:23:38.517","nm":8,"sd":5,"cents":0.3095,"tok":73687},{"t":"2026-09-17 20:23:54.915","nm":8,"sd":5,"cents":0.3278,"tok":78037},{"t":"2026-09-17 20:24:03.120","nm":8,"sd":6,"cents":0.334,"tok":79528},{"t":"2026-09-17 20:25:03.082","nm":8,"sd":6,"cents":0.3591,"tok":85509},{"t":"2026-09-17 20:25:30.006","nm":8,"sd":7,"cents":0.3932,"tok":93613},{"t":"2026-09-17 20:25:39.818","nm":8,"sd":7,"cents":0.4017,"tok":95645},{"t":"2026-09-17 20:27:16.908","nm":8,"sd":7,"cents":0.4357,"tok":103731},{"t":"2026-09-17 20:28:07.150","nm":8,"sd":7,"cents":0.4573,"tok":108874},{"t":"2026-09-17 20:28:35.312","nm":8,"sd":7,"cents":0.4757,"tok":113268},{"t":"2026-09-17 20:28:43.285","nm":9,"sd":7,"cents":0.4798,"tok":114229},{"t":"2026-09-17 20:29:34.348","nm":9,"sd":7,"cents":0.4968,"tok":118297},{"t":"2026-09-17 20:29:47.518","nm":9,"sd":8,"cents":0.5035,"tok":119886},{"t":"2026-09-17 20:30:05.877","nm":10,"sd":8,"cents":0.5218,"tok":124249},{"t":"2026-09-17 20:30:22.387","nm":11,"sd":8,"cents":0.5265,"tok":125355},{"t":"2026-09-17 20:30:32.901","nm":11,"sd":8,"cents":0.5284,"tok":125798},{"t":"2026-09-17 20:30:39.659","nm":12,"sd":8,"cents":0.532,"tok":126673},{"t":"2026-09-17 20:30:40.234","nm":12,"sd":9,"cents":0.5368,"tok":127801},{"t":"2026-09-17 20:31:26.375","nm":13,"sd":9,"cents":0.5613,"tok":133648},{"t":"2026-09-17 20:31:36.805","nm":13,"sd":9,"cents":0.5676,"tok":135141},{"t":"2026-09-17 20:32:57.543","nm":14,"sd":9,"cents":0.5718,"tok":136144},{"t":"2026-09-17 20:33:44.311","nm":15,"sd":9,"cents":0.5778,"tok":137561},{"t":"2026-09-17 20:34:04.963","nm":15,"sd":10,"cents":0.5852,"tok":139329},{"t":"2026-09-17 20:34:38.728","nm":15,"sd":11,"cents":0.5943,"tok":141494},{"t":"2026-09-17 20:35:42.981","nm":15,"sd":11,"cents":0.6025,"tok":143459},{"t":"2026-09-17 20:37:25.801","nm":15,"sd":11,"cents":0.6238,"tok":148532},{"t":"2026-09-17 20:38:33.081","nm":16,"sd":11,"cents":0.6489,"tok":154497},{"t":"2026-09-17 20:39:07.951","nm":17,"sd":11,"cents":0.6607,"tok":157320},{"t":"2026-09-17 20:39:24.763","nm":17,"sd":11,"cents":0.6754,"tok":160818},{"t":"2026-09-17 20:39:38.609","nm":17,"sd":11,"cents":0.6975,"tok":166066},{"t":"2026-09-17 20:39:49.965","nm":17,"sd":11,"cents":0.716,"tok":170487},{"t":"2026-09-17 20:40:08.145","nm":17,"sd":11,"cents":0.7418,"tok":176611},{"t":"2026-09-17 20:40:29.716","nm":17,"sd":11,"cents":0.7679,"tok":182844},{"t":"2026-09-17 20:40:58.994","nm":17,"sd":11,"cents":0.7903,"tok":188169},{"t":"2026-09-17 20:41:33.838","nm":17,"sd":11,"cents":0.8175,"tok":194634},{"t":"2026-09-17 20:42:03.834","nm":18,"sd":11,"cents":0.8452,"tok":201236},{"t":"2026-09-17 20:42:04.364","nm":18,"sd":11,"cents":0.8485,"tok":202016},{"t":"2026-09-17 20:42:39.264","nm":18,"sd":11,"cents":0.8805,"tok":209643},{"t":"2026-09-17 20:42:50.239","nm":19,"sd":11,"cents":0.8939,"tok":212843},{"t":"2026-09-17 20:43:19.852","nm":19,"sd":11,"cents":0.907,"tok":215961},{"t":"2026-09-17 20:43:31.214","nm":19,"sd":12,"cents":0.9113,"tok":216969},{"t":"2026-09-17 20:43:54.719","nm":20,"sd":12,"cents":0.933,"tok":222154},{"t":"2026-09-17 20:44:17.887","nm":20,"sd":12,"cents":0.9505,"tok":226313},{"t":"2026-09-17 20:46:52.181","nm":20,"sd":12,"cents":0.9878,"tok":235183},{"t":"2026-09-17 20:48:29.032","nm":21,"sd":12,"cents":0.9979,"tok":237585},{"t":"2026-09-17 20:48:59.621","nm":22,"sd":12,"cents":1.0028,"tok":238757},{"t":"2026-09-17 20:49:39.202","nm":22,"sd":12,"cents":1.017,"tok":242152},{"t":"2026-09-17 20:54:53.986","nm":22,"sd":12,"cents":1.0521,"tok":250508},{"t":"2026-09-17 21:08:06.855","nm":22,"sd":12,"cents":1.0781,"tok":256689},{"t":"2026-09-17 21:08:32.897","nm":22,"sd":12,"cents":1.0982,"tok":261481},{"t":"2026-09-17 21:08:49.846","nm":22,"sd":12,"cents":1.1184,"tok":266287},{"t":"2026-09-17 21:09:06.823","nm":22,"sd":12,"cents":1.143,"tok":272135},{"t":"2026-09-17 21:09:34.026","nm":22,"sd":12,"cents":1.169,"tok":278329},{"t":"2026-09-17 21:10:06.930","nm":22,"sd":12,"cents":1.1959,"tok":284748},{"t":"2026-09-17 21:10:39.352","nm":22,"sd":12,"cents":1.2265,"tok":292026},{"t":"2026-09-17 21:11:13.552","nm":22,"sd":12,"cents":1.2508,"tok":297810},{"t":"2026-09-17 21:11:48.687","nm":22,"sd":12,"cents":1.278,"tok":304277},{"t":"2026-09-17 21:12:21.520","nm":22,"sd":12,"cents":1.3004,"tok":309608},{"t":"2026-09-17 21:13:13.455","nm":22,"sd":12,"cents":1.3284,"tok":316276},{"t":"2026-09-17 21:14:08.554","nm":22,"sd":12,"cents":1.356,"tok":322856},{"t":"2026-09-17 21:14:57.552","nm":22,"sd":12,"cents":1.3888,"tok":330666},{"t":"2026-09-17 21:16:15.655","nm":22,"sd":12,"cents":1.4154,"tok":337003},{"t":"2026-09-17 21:16:30.239","nm":23,"sd":12,"cents":1.4177,"tok":337554},{"t":"2026-09-17 21:16:43.774","nm":24,"sd":12,"cents":1.43,"tok":340482},{"t":"2026-09-17 21:17:00.891","nm":25,"sd":12,"cents":1.4335,"tok":341303},{"t":"2026-09-17 21:17:08.503","nm":26,"sd":12,"cents":1.4417,"tok":343261},{"t":"2026-09-17 21:17:15.103","nm":27,"sd":12,"cents":1.4434,"tok":343676},{"t":"2026-09-17 21:17:33.513","nm":27,"sd":13,"cents":1.4493,"tok":345060},{"t":"2026-09-17 21:18:56.687","nm":28,"sd":13,"cents":1.4618,"tok":348042},{"t":"2026-09-17 21:19:26.664","nm":28,"sd":13,"cents":1.4706,"tok":350153},{"t":"2026-09-17 21:20:30.277","nm":29,"sd":13,"cents":1.4993,"tok":356965},{"t":"2026-09-17 21:20:33.433","nm":29,"sd":13,"cents":1.5011,"tok":357414},{"t":"2026-09-17 21:20:38.464","nm":29,"sd":14,"cents":1.5049,"tok":358298},{"t":"2026-09-17 21:20:47.762","nm":30,"sd":14,"cents":1.5072,"tok":358869},{"t":"2026-09-17 21:21:23.842","nm":31,"sd":14,"cents":1.517,"tok":361196},{"t":"2026-09-17 21:21:53.308","nm":31,"sd":15,"cents":1.5232,"tok":362665},{"t":"2026-09-17 21:21:55.013","nm":31,"sd":15,"cents":1.5306,"tok":364435},{"t":"2026-09-17 21:26:30.471","nm":31,"sd":15,"cents":1.5599,"tok":371412},{"t":"2026-09-17 21:34:14.724","nm":31,"sd":15,"cents":1.5853,"tok":377451},{"t":"2026-09-17 21:36:54.079","nm":32,"sd":15,"cents":1.5986,"tok":380614},{"t":"2026-09-17 21:41:40.110","nm":32,"sd":15,"cents":1.6095,"tok":383218},{"t":"2026-09-17 21:46:48.814","nm":32,"sd":15,"cents":1.6351,"tok":389301},{"t":"2026-09-17 21:48:55.099","nm":32,"sd":16,"cents":1.6429,"tok":391164},{"t":"2026-09-17 21:50:48.359","nm":32,"sd":16,"cents":1.6604,"tok":395336},{"t":"2026-09-17 21:54:52.867","nm":33,"sd":16,"cents":1.681,"tok":400247},{"t":"2026-09-17 21:56:56.447","nm":34,"sd":16,"cents":1.6866,"tok":401580},{"t":"2026-09-17 21:57:04.424","nm":35,"sd":16,"cents":1.6884,"tok":401995},{"t":"2026-09-17 21:57:53.790","nm":36,"sd":16,"cents":1.6922,"tok":402900},{"t":"2026-09-17 21:58:24.357","nm":36,"sd":16,"cents":1.6941,"tok":403347},{"t":"2026-09-17 21:59:09.900","nm":36,"sd":16,"cents":1.7166,"tok":408704}]};
+const ALERT = '#b3261e', GREY = '#8b93a1', LINE = '#e5e7eb', DIM = '#6b7280', FAINT = '#9ca3af', INK = '#0f1114';
+const HOT = {'Wants you':1, 'Off the rails':1, 'Spinning':1};
+
+/* ---- the one tooltip ---- */
+const tip = document.getElementById('tip');
+function showTip(l1, l2, l3, hot, x, y) {
+  tip.querySelector('.t1').innerHTML = l1;
+  const t2 = tip.querySelector('.t2'); t2.innerHTML = l2; t2.classList.toggle('hot', !!hot);
+  tip.querySelector('.t3').innerHTML = l3;
+  tip.style.display = 'block';
+  const w = 336, h = tip.offsetHeight;
+  let left = x + 16, top = y + 14;
+  if (left + w + 12 > window.innerWidth) left = x - w - 16;
+  if (top + h + 12 > window.innerHeight) top = y - h - 14;
+  tip.style.left = Math.max(8, left) + 'px'; tip.style.top = Math.max(8, top) + 'px';
+}
+function hideTip(){ tip.style.display = 'none'; }
+document.querySelectorAll('[data-t1]').forEach(el => {
+  el.addEventListener('mousemove', e => showTip(el.dataset.t1, el.dataset.t2, el.dataset.t3, el.dataset.hot === '1', e.clientX, e.clientY));
+  el.addEventListener('mouseleave', hideTip);
+});
+
+/* ---- band 2 + band 3, one figure, one x ---- */
+const N = DATA.runs.length;                 // 6
+const YTOP = 1.05, YBOT = -(N - 1) - 0.55;  // room for the "You" marker lane at 0.62
+const MSG_Y = 0.62;
+const D2 = [0.335, 1.0], D3 = [0.0, 0.245];
+
+const fmt = t => t.slice(11,16);
+const lanes = {alert: [], grey: [], idle: [], waiting: []};
+DATA.runs.forEach(r => {
+  r.segs.forEach(s => {
+    const bucket = s.note === 'waiting' ? 'waiting' : (HOT[s.state] ? 'alert' : (s.state === 'Idle' ? 'idle' : 'grey'));
+    lanes[bucket].push({y: -r.row, base: s.t0, dur: (new Date(s.t1) - new Date(s.t0)),
+      cd: [
+        '<b>' + r.name + '</b> was <b>' + s.state + '</b> from ' + fmt(s.t0) + ' to ' + fmt(s.t1) + '.',
+        stateArith(r, s),
+        stateDo(s.state)
+      ]});
+  });
+});
+function stateArith(r, s) {
+  const mins = Math.round((new Date(s.t1) - new Date(s.t0)) / 60000);
+  if (s.state === 'Wants you') return 'Its last Stop scored ' + r.lastStopNO + ' on "does this stop need a decision", over the 0.50 line, and you have not answered it. ' + mins + ' minutes so far.';
+  if (s.state === 'Off the rails') return 'Too much fired on two of the last three stops. Held for ' + mins + ' minutes.';
+  if (s.state === 'Idle') return 'No events for ' + mins + ' minutes. Under 10 it is Working, over 2 hours it leaves this list.';
+  return 'Events inside this window and none of the alarm rules held. ' + mins + ' minutes.';
+}
+function stateDo(st) {
+  return {'Wants you': 'Open this tab. It stopped on a decision and is holding.',
+          'Off the rails': 'Pull it back. Too much means it did more than you asked.',
+          'Spinning': 'Step in; change the approach.',
+          'Working': 'Leave it alone.',
+          'Idle': 'Paused, or waiting for you without saying so.'}[st];
+}
+function laneTrace(items, colour, opacity, name) {
+  return {type:'bar', orientation:'h', name:'', hoverinfo:'none',
+    x: items.map(d => d.dur), base: items.map(d => d.base), y: items.map(d => d.y),
+    customdata: items.map(d => d.cd), width: 0.30,
+    marker:{color: colour, opacity: opacity, line:{width:0}}, xaxis:'x', yaxis:'y'};
+}
+
+const SIGROW = {'Too much': 0.265, 'Risky move': 0.0, 'Spinning': 0.0, 'Says done': -0.265};
+const SIGSYM = {'Risky move':'circle', 'Too much':'square', 'Spinning':'x', 'Says done':'circle-open'};
+const SIGMEAN = {
+ 'Risky move': ['The command it is about to run is hard or impossible to undo.', 'Decide before it runs (phase 3); today, notice.'],
+ 'Too much': ['It did more than you asked &mdash; extra files, extra features, a refactor nobody ordered.', 'Pull it back.'],
+ 'Says done': ['The reply states the task is finished. A fact, not an alarm.', 'Nothing by itself. It is the denominator for Receipts.'],
+ 'Spinning': ['Repeating a failing attempt without new information.', 'Step in; change the approach.']};
+const SIGTOT = {'Risky move':[36,386], 'Says done':[16,231], 'Too much':[12,29], 'Spinning':[0,29]};
+
+function dotTrace(sig, colour, open) {
+  const d = DATA.dots.filter(x => x.sig === sig);
+  return {type:'scatter', mode:'markers', name:'', hoverinfo:'none',
+    x: d.map(x => x.t), y: d.map(x => -x.row + SIGROW[sig]),
+    customdata: d.map(x => {
+      const [mean, act] = SIGMEAN[sig], [f, a] = SIGTOT[sig];
+      return ['<b>' + sig + '</b> &mdash; ' + mean,
+        'The judge scored <b>' + x.p.toFixed(2) + '</b> on the ' + x.ev + (x.tool ? ' for ' + x.tool : '') +
+        ' at ' + fmt(x.t) + ' in ' + x.run + '. Fires at 0.50. ' + sig + ' has fired ' + f + ' of ' + a + ' today = ' + (100*f/a).toFixed(1) + '%.',
+        act];
+    }),
+    marker:{symbol: SIGSYM[sig], size: 7, color: open ? 'rgba(0,0,0,0)' : colour,
+            line:{color: colour, width: open ? 1.3 : 0}},
+    xaxis:'x', yaxis:'y'};
+}
+
+/* owner messages: the vertical rules, with a hoverable head in the "You" lane */
+const solid = DATA.rules.filter(r => r.fired), faint = DATA.rules.filter(r => !r.fired);
+function ruleTrace(rs, colour, open) {
+  return {type:'scatter', mode:'markers', name:'', hoverinfo:'none',
+    x: rs.map(r => r.t), y: rs.map(() => MSG_Y),
+    customdata: rs.map(r => [
+      'A message from <b>you</b> at ' + fmt(r.t) + ', in <b>' + r.run + '</b>. The rule runs down through both bands so you can read what it changed.',
+      'Sharp turn scored <b>' + r.sharp.toFixed(2) + '</b>' + (r.fired ? ', over the 0.50 line' : ', under the 0.50 line') +
+      '. Sharp turn fires on 16 of your 33 messages today = 48%, which is why signals.md demotes it from an alarm to a timeline marker.',
+      'Whether this was a <b>Correction</b> or a <b>Nudge</b> cannot be told from here: that split needs the interrupt marker, and schema v1 does not log it. Over 90 days the split was 22 Corrections to 24 Nudges.'
+    ]),
+    marker:{symbol:'triangle-down', size: 9, color: open ? 'rgba(0,0,0,0)' : colour,
+            line:{color: colour, width: open ? 1.2 : 0}},
+    xaxis:'x', yaxis:'y'};
+}
+
+/* band 3 */
+const cx = DATA.cum.map(c => c.t);
+const p_nm = {type:'scatter', mode:'lines', name:'', hoverinfo:'none', x: cx, y: DATA.cum.map(c => c.nm),
+  line:{color: ALERT, width: 1.8, shape:'hv'}, xaxis:'x2', yaxis:'y2',
+  customdata: DATA.cum.map(c => ['<b>Near misses</b> &mdash; risky moves agents attempted, running total.',
+    c.nm + ' by ' + fmt(c.t) + '. Risky move fired 36 of 386 tool calls judged across the day = 9.3%.',
+    'Today, notice. In phase 3 you would decide before it runs.'])};
+const p_sd = {type:'scatter', mode:'lines', name:'', hoverinfo:'none', x: cx, y: DATA.cum.map(c => c.sd),
+  line:{color: GREY, width: 1.6, shape:'hv'}, xaxis:'x2', yaxis:'y2',
+  customdata: DATA.cum.map(c => ['<b>Says done</b> &mdash; replies that state the task is finished, running total. A fact, not an alarm.',
+    c.sd + ' by ' + fmt(c.t) + '. Says done fired 16 of 231 replies across the day = 6.9%.',
+    'Nothing by itself. It is the denominator: Receipts = claims with evidence &divide; Says done.'])};
+const p_cost = {type:'scatter', mode:'lines', name:'', hoverinfo:'none', x: cx, y: DATA.cum.map(c => c.cents),
+  fill:'tozeroy', fillcolor:'rgba(139,147,161,0.13)', line:{color: FAINT, width: 1, dash:'dot'},
+  xaxis:'x2', yaxis:'y3',
+  customdata: DATA.cum.map(c => ['<b>Cost</b> &mdash; what watching has cost, running total.',
+    c.tok.toLocaleString() + ' input tokens &times; $0.042 per million = ' + c.cents.toFixed(2) + '&cent; by ' + fmt(c.t) + '. Full day: 408,704 tokens = 1.7&cent;.',
+    'Nothing. A full day of watching costs a few cents.'])};
+
+/* the intervention rules, as paper-height shapes through both bands */
+const shapes = [{type:'line', xref:'x', yref:'paper', x0: DATA.meta.t0, x1: DATA.meta.t0, y0:0, y1:1,
+                 line:{color: INK, width: 1, dash:'dot'}, opacity: 0, layer:'above'}];
+/* Only a Sharp turn earns a rule through both bands. Your other 17 messages stay a hollow
+   tick in the You lane: a rule for every message is a picket fence, not a story. */
+solid.forEach(r => shapes.push({type:'line', xref:'x', yref:'paper', x0:r.t, x1:r.t, y0:0, y1:1,
+  line:{color: ALERT, width: 1, dash:'solid'}, opacity: 0.38, layer:'below'}));
+
+const ytext = DATA.runs.map(r => {
+  const c = HOT[r.state] ? ALERT : DIM;
+  const wait = (r.state === 'Wants you' || r.state === 'Idle') ? ' \u00b7 ' + Math.round(r.gap) + ' min'
+            : r.state === 'Off the rails' ? ' \u00b7 now' : '';
+  return r.name + '<br><span style="color:' + c + '">' + r.state + wait + '</span>';
+});
+
+const layout = {
+  width: 1388, height: 556, margin:{l:152, r:52, t:6, b:24}, showlegend:false,
+  paper_bgcolor:'#fff', plot_bgcolor:'#fff', hovermode:'closest', hoverdistance: 14,
+  font:{family:'-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif', size:11, color: DIM},
+  shapes: shapes, barmode:'overlay', bargap: 0,
+  xaxis:{domain:[0,1], anchor:'y', type:'date', showticklabels:false, showgrid:true, gridcolor: LINE,
+         gridwidth:1, dtick: 15*60*1000, zeroline:false, showline:false,
+         range:[DATA.meta.t0, DATA.meta.now], fixedrange:true},
+  yaxis:{domain: D2, anchor:'x', range:[YBOT, YTOP], fixedrange:true, showgrid:false, zeroline:false,
+         showline:false, ticks:'', tickvals:[MSG_Y].concat(DATA.runs.map(r => -r.row)),
+         ticktext:['<span style="color:' + FAINT + '">You</span>'].concat(ytext),
+         tickfont:{size:11.5, color: INK}, ticklabelposition:'outside'},
+  xaxis2:{domain:[0,1], anchor:'y2', type:'date', matches:'x', showgrid:true, gridcolor: LINE, gridwidth:1,
+          dtick: 15*60*1000, tickformat:'%H:%M', zeroline:false, showline:true, linecolor: LINE,
+          tickfont:{size:10.5, color: FAINT}, fixedrange:true},
+  yaxis2:{domain: D3, anchor:'x2', range:[0, 40], fixedrange:true, showgrid:true, gridcolor: LINE,
+          zeroline:false, tickvals:[0,10,20,30,40], tickfont:{size:10, color: FAINT}, ticks:''},
+  yaxis3:{domain: D3, anchor:'x2', overlaying:'y2', side:'right', range:[0, 3.0], fixedrange:true,
+          showgrid:false, zeroline:false, tickvals:[0,1,2,3], ticktext:['0','1\u00a2','2\u00a2','3\u00a2'],
+          tickfont:{size:10, color: FAINT}, ticks:''}
+};
+
+const traces = [
+  laneTrace(lanes.idle, LINE, 1),
+  laneTrace(lanes.waiting, ALERT, 0.17),
+  laneTrace(lanes.grey, GREY, 0.26),
+  laneTrace(lanes.alert, ALERT, 0.80),
+  dotTrace('Says done', GREY, true),
+  dotTrace('Risky move', ALERT, false),
+  dotTrace('Too much', ALERT, false),
+  dotTrace('Spinning', ALERT, false),
+  ruleTrace(faint, FAINT, true),
+  ruleTrace(solid, ALERT, false),
+  p_cost, p_sd, p_nm
+];
+
+Plotly.newPlot('plot', traces, layout, {displayModeBar:false, staticPlot:false, responsive:false})
+.then(gd => {
+  gd.on('plotly_hover', ev => {
+    const p = ev.points[0];
+    if (!p || !p.customdata) return;
+    const cd = p.customdata;
+    const mx = ev.event ? ev.event.clientX : 0, my = ev.event ? ev.event.clientY : 0;
+    showTip(cd[0], cd[1], cd[2], /Wants you|Off the rails|Risky move|Too much|Spinning|Sharp turn|over the 0.50/.test(cd[0] + cd[1]), mx, my);
+    const xv = p.x;
+    Plotly.relayout(gd, {'shapes[0].x0': xv, 'shapes[0].x1': xv, 'shapes[0].opacity': 0.9});
+  });
+  gd.on('plotly_unhover', () => { hideTip(); Plotly.relayout(gd, {'shapes[0].opacity': 0}); });
+  window.__ready = true;
+});
+
+/* band-3 title, placed over the plot so all three band titles share one style */
+(function () {
+  const H = 556, mT = 6, mB = 24, area = H - mT - mB;
+  const top = mT + (1 - D3[1]) * area - 26;
+  const el = document.createElement('div');
+  el.className = 'overtitle'; el.style.top = top + 'px';
+  el.innerHTML = '<h2 class="band">Parameters</h2>' +
+    '<span class="swatch"><i style="border-top-color:' + ALERT + '"></i>Near misses</span>' +
+    '<span class="swatch"><i style="border-top-color:' + GREY + '"></i>Says done</span>' +
+    '<span class="swatch"><i style="border-top-color:' + FAINT + ';border-top-style:dotted"></i>Cost, right axis, in cents</span>' +
+    '<span class="bandsub">Corrections and Receipts join this band when the interrupt marker and No receipts land.</span>';
+  document.getElementById('stage').appendChild(el);
+})();
+</script>
+</body>
+</html>

@@ -59,6 +59,7 @@ class HookContract(IsolatedHome):
         self.assertEqual([x.get("error") for x in lines], [None, None, "no_key"],
                          "only the Bash call had a question to ask without a transcript")
         self.assertEqual([x["tail_error"] for x in lines[:2]], ["FileNotFoundError"] * 2)
+        self.assertIs(lines[0]["wants_you"], True, "read from the payload, whatever the tail did")
 
     def test_malformed_payload_logs_error_class(self) -> None:
         with open(os.path.join(HERE, "payloads", "malformed.json"), "rb") as f:
@@ -80,7 +81,11 @@ class HookContract(IsolatedHome):
             self.assertEqual((proc.returncode, proc.stdout), (0, b""))
         with open(os.path.join(HERE, "payloads", "subagent_stop.json"), "rb") as f:
             self.assertEqual(self.run_hook(f.read()).returncode, 0)
-        self.assertEqual(log.read(limit=100), [])
+        note = dict(payload("user_prompt_submit"), prompt="<task-notification>\n<result>done"
+                                                          "</result>\n</task-notification>")
+        proc = self.run_hook(json.dumps(note).encode())
+        self.assertEqual((proc.returncode, proc.stdout, proc.stderr), (0, b"", b""))
+        self.assertEqual(log.read(limit=100), [], "a background agent's return is not his prompt")
 
     def test_broken_import_still_exits_zero_and_silent(self) -> None:
         """A copy of hook.py whose sibling package lacks judge/log: the import inside main() fails."""

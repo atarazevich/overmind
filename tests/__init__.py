@@ -21,7 +21,7 @@ def rec(kind: str, ts: str, content: object, **extra: object) -> str:
     line = {"type": kind, "timestamp": ts, "sessionId": "s-1", "cwd": "/tmp/demo",
             "message": {"role": kind, "content": content}}
     line.update(extra)
-    return json.dumps(line)
+    return json.dumps(line, separators=(",", ":"))  # compact, as Claude Code writes it
 
 
 def text(body: str) -> list:

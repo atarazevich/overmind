@@ -4,8 +4,8 @@ Runtime dir: ~/Library/Application Support/Overmind (override with OVERMIND_HOME
 
 **v2 (2026-09-18, #16).** Lines carry the facts read from the payload and the transcript tail
 beside the answers: `interrupted` / `depth` / `tool_calls` on UserPromptSubmit, `depth` /
-`tool_calls` on Stop, `tail_error` when the tail failed, `tail_exhausted` when it ran out of
-window before the owner's previous message, `wrong_room_why` when that rule fired. A line with no
+`tool_calls` / `wants_you` on Stop, `tail_error` when the tail failed, `tail_exhausted` when it
+ran out before the owner's previous message, `wrong_room_why` when that rule fired. A line with no
 `model` is a line no Jev request was made for — the facts and the free rules alone.
 v1 lines stay exactly as written and the dashboard reads both: it keys on `answers` and `ts`,
 which neither version moved.

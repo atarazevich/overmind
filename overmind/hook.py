@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Overmind hook: one Claude Code event on stdin → one Jev request → one JSONL line.
 
-Fail-safe contract: exit 0 always, never write to stdout, finish the synchronous part in < 50 ms.
+Fail-safe contract: exit 0 always, never write to stdout, bound the work by counts (CLAUDE.md).
 The parent reads stdin, builds the state, forks; the child (own session, stdio on /dev/null)
 does the network call and the append. Any exception becomes an error line.
 """

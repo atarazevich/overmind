@@ -991,6 +991,14 @@ def esc(text: str) -> str:
     return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
+def fold(title: str, note: str, body: str, open_: bool = False) -> str:
+    """One section of a report, closed unless asked: level 0 stays on one screen. Every
+    experiment's report.html is CSS plus these."""
+    return ('<details%s><summary><h2>%s</h2><span class="dim">%s</span></summary>'
+            '<div class="body">%s</div></details>'
+            % (" open" if open_ else "", esc(title), esc(note), body))
+
+
 def write_report(path: str, meta: dict, live: list[dict], r1: list[dict], acc: list[dict],
                  sweep: list[dict], hits: list[dict], sessions: list[dict]) -> None:
     verdict_class = {"keep": "sep", "rewrite": "warn", "drop": "dead", "no evidence": "dim"}
@@ -1034,11 +1042,6 @@ def write_report(path: str, meta: dict, live: list[dict], r1: list[dict], acc: l
         % (s["min_chars"], " ←" if s["chosen"] else "", s["ratio"], pct(s["fire_correction"]),
            pct(s["fire_matched"]), pct(s["fire_clean"]), pp(s["lift_matched"]))
         for s in sweep)
-
-    def fold(title: str, note: str, body: str, open_: bool = False) -> str:
-        return ('<details%s><summary><h2>%s</h2><span class="dim">%s</span></summary>'
-                '<div class="body">%s</div></details>'
-                % (" open" if open_ else "", esc(title), esc(note), body))
 
     per_class = "".join(
         "<p><code>%s</code>%s %s<br><span class=\"dim\">true: %s<br>false: %s</span></p>"

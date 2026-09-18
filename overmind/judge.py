@@ -163,7 +163,7 @@ def opted_in(session_id: str) -> bool:
 def tail_facts(last: dict) -> dict:
     """What a transcript tail contributes to the line, including the class of what went wrong.
 
-    A tail that failed, or that ran out of window before it reached the owner's previous message,
+    A tail that failed, or that ran out of bounds before it reached the owner's previous message,
     says so on the line: a guard that silently stopped firing is the one failure this project is
     least allowed to have, and both of those cases otherwise read as a clean quiet turn.
     """
@@ -182,8 +182,8 @@ def prepare(payload: dict) -> dict | None:
     overmind.rules already decided, `questions` what Jev is to be asked — empty means no request
     at all and the line is its facts alone.
 
-    Runs in the synchronous parent: json, one bounded transcript tail, one small read and one
-    small write for the per-session prompt cache.
+    Runs in the parent, before the fork: json, one bounded transcript tail, one small read and
+    one small write for the per-session prompt cache.
     """
     event = str(payload.get("hook_event_name") or "")
     sid = str(payload.get("session_id") or "")
@@ -192,11 +192,17 @@ def prepare(payload: dict) -> dict | None:
     header = {"event": event, "session_id": sid, "cwd": os.path.basename(cwd.rstrip("/"))}
     answers: dict[str, float] = {}
     if event == "Stop":
-        last = transcript.tail(path)
+        said = payload.get("last_assistant_message")
+        final = said if isinstance(said, str) else None  # older Claude Code sends no such field
+        # The turn's final message closes `reply`, as it did in every turn `jumped` was scored on:
+        # the transcript on disk often lacks it when Stop fires (#17).
+        last = transcript.tail(path, said=final or "")
         # The cache is this session's own UserPromptSubmit; the tail's boundary message is what a
         # session resumed since then has instead, and its first Stop has nothing else.
         asked, calls = cached_prompt(sid) or last["owner_asked"], last["tool_calls"]
         facts = tail_facts(last)
+        if final is not None:  # no field is unknown, not "no"
+            facts["wants_you"] = rules.wants_you(final)
         state: dict = {}
         questions: dict = {}
         if asked.strip() and calls:
@@ -208,7 +214,10 @@ def prepare(payload: dict) -> dict | None:
             questions = STOP
     elif event == "UserPromptSubmit":
         prompt = str(payload.get("prompt") or "")
-        if not prompt.strip():
+        if not prompt.strip() or transcript.is_notification(prompt):
+            # Not his prompt: Claude Code delivers a background agent's return through this event
+            # too — half of all live prompts (#17). Read as his, it wrote a line whose previous
+            # message sat a megabyte back, and it became the request the next Stop asks about.
             return None
         last = transcript.tail(path, prompt)
         facts = {"interrupted": last["interrupted"], **tail_facts(last)}

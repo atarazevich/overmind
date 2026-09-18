@@ -11,13 +11,13 @@ Done by the owner's main thread, by hand, one entry at a time. Never by a subage
 
 ## Interpreter
 
-The command names `/usr/bin/python3` (the system Python, 3.9+), the same binary the agent-notch hook uses and the one in the hook's shebang. A bare `python3` would resolve to the pyenv shim, which adds ~110 ms per launch and would break the < 50 ms synchronous budget.
+The command names `/usr/bin/python3` (the system Python, 3.9+), the same binary the agent-notch hook uses and the one in the hook's shebang. A bare `python3` would resolve to the pyenv shim, which adds ~110 ms per launch — on every event of every session.
 
 ## The entries
 
 Three are live. The fourth, SubagentStop, no longer has a question to ask: the hook reads its payload and returns without writing. Leaving it wired costs one interpreter start per subagent and nothing else; remove it whenever convenient.
 
-Each is one object to append to the existing array for that event under `"hooks"`. `"async": true` lets Claude continue without waiting; the hook forks anyway, so the parent returns in ~20 ms either way. `"timeout": 10` is not enforced on async hooks but documents the budget (Jev call times out at 5 s).
+Each is one object to append to the existing array for that event under `"hooks"`. `"async": true` lets Claude continue without waiting, so the hook costs the session no latency. `"timeout": 10` is not enforced on async hooks and bounds nothing: the hook bounds its own work by counts, and the detached Jev call has a 5 s timeout and an alarm.
 
 ### 1. Stop
 
@@ -73,7 +73,7 @@ The entry, if it is still there, has the same shape as the Stop one. It writes n
 
 Start a new Claude Code session (settings are read at launch), do one turn, and watch: `~/Projects/overmind/overmind/tail.py 10`. A line per event with `answers` means it works; a line with `error` names the failing class; no line at all means the entry did not fire (check the event name and matcher). Add the next entry only after the previous one shows lines.
 
-A Stop or a UserPromptSubmit line with `"tail_error"` means the hook could not read that session's transcript: the answers it could still give are there, `depth` and `interrupted` are not. `"tail_exhausted":true` means it read the window and ran out of it before reaching your previous message — the counts on that line are lower bounds and `interrupted` is unknown, not false. Neither key present is the healthy case.
+A Stop or a UserPromptSubmit line with `"tail_error"` means the hook could not read that session's transcript: the answers it could still give are there, `depth` and `interrupted` are not. `"tail_exhausted":true` means the scan hit one of its bounds (8 MB read, 5,000 lines, or a line over 1 MB that is not a tool result) before reaching your previous message — the counts on that line are lower bounds and `interrupted` is unknown, not false. Neither key present is the healthy case.
 
 ## Opt-in text for one session
 

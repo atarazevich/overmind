@@ -6,12 +6,14 @@ paths named it is +19 pp on the truncation-matched control at a 2% base rate (#1
 here, in code, and costs nothing per event.
 
 Written for experiments/conduct_classes.py, which scored it, and imported from there so the hook
-and the experiment run the same rule rather than two that drift apart. Stdlib only, no state, no
-clock: given the same turn it says the same thing forever.
+and the experiment run the same rule rather than two that drift apart. **Wants you** lives here
+for the same reason, scored by experiments/wants_you.py (#17). Stdlib only, no state, no clock:
+given the same turn it says the same thing forever.
 """
 from __future__ import annotations
 
 import os
+import re
 
 HOME = os.path.expanduser("~")
 SESSION_SIDECAR = "/.claude/projects/"  # Claude Code's own per-project folder, slug for a path
@@ -106,3 +108,38 @@ def wrong_room(calls: list[dict], owner_request: str, cwd: str) -> tuple[bool, s
         return False, ""
     return True, "wrote in %s, and the turn is in %s" % (", ".join(sorted(set(outside))[:3]),
                                                          here or "?")
+
+
+# **Wants you** is read, never judged (docs/signals.md): the agent's last paragraph to him holds a
+# question or asks him for something. Measured by experiments/wants_you.py against 200 Stops read
+# by hand — 0.89 accurate on the 100 it was not written on, where "the last line ends in a
+# question mark" is 0.77. Optimistic: the agent that wrote the rule also wrote the labels, so the
+# number is not the owner's judgment. Its false alarms are conditional offers ("say the word").
+# Every pattern here costs time linear in the reply: HRULE's whitespace never crosses a line, and
+# ASKS, whose unanchored Cyrillic half costs ~0.5 µs a character, reads ASK_CHARS at most.
+FENCE = re.compile(r"```.*?(?:```|$)", re.S)
+HRULE = re.compile(r"^[^\S\n]*(?:-{3,}|\*{3,}|_{3,})[^\S\n]*$", re.M)
+PARAGRAPH = re.compile(r"\n\s*\n")
+ASKS = re.compile(
+    r"\b(?:want me to|should i|shall i|do you want|would you like|your call|tell me|let me know"
+    r"|say the word|waiting on you|waiting for you|awaiting your"
+    r"|your (?:answer|decision|approval|go-ahead))\b"
+    r"|(?:скажи|напиши|отпиши|подтверди|кинь|скинь|хочешь"
+    r"|жду (?:тво|вывод|ответ|результат команды))", re.I)
+ASK_CHARS = 2000  # the end of the last paragraph that is read; the longest of 1,072 real ones is 968
+
+
+def wants_you(reply: str) -> bool:
+    """Whether the last paragraph the agent says to him asks him something.
+
+    Only the words said to him count: no code, no table rows, no quoted lines, and no draft
+    written for someone else — a reply that ends on a horizontal rule is closing a quoted draft.
+    """
+    text = FENCE.sub("", reply).strip()
+    parts = HRULE.split(text)
+    if len(parts) > 2 and not parts[-1].strip():
+        text = "\n".join(parts[:-2])
+    text = "\n".join(line for line in text.splitlines()
+                     if not line.lstrip().startswith(("|", ">"))).strip()
+    last = PARAGRAPH.split(text)[-1][-ASK_CHARS:]
+    return "?" in last or bool(ASKS.search(last))

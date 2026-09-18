@@ -294,12 +294,6 @@ def write_validation(path: str, s: dict, items: list[dict]) -> None:
         handle.write("\n".join(body))
 
 
-def fold(title: str, note: str, body: str) -> str:
-    """One closed section of the report. Level 0 stays on one screen; everything else folds."""
-    return ('<details><summary><h2>%s</h2><span class="dim">%s</span></summary>'
-            '<div class="body">%s</div></details>' % (cc.esc(title), cc.esc(note), body))
-
-
 def write_report(path: str, s: dict, items: list[dict]) -> None:
     scored = [i for i in items if "p" in i]
     cards = [("corrections", s["n_correction"]), ("nudges", s["n_nudge"]),
@@ -367,14 +361,14 @@ def write_report(path: str, s: dict, items: list[dict]) -> None:
         "lift": cc.pp(s["lift"]), "mc": s["mean_correction"], "mn": s["mean_nudge"],
         "ml": s["mean_lift"],
         "folds": "".join([
-            fold("The threshold", "%.2f is a choice, not a fact" % FIRE, rows(s["sweep"], "p ≥")),
-            fold("Against the free fact",
+            cc.fold("The threshold", "%.2f is a choice, not a fact" % FIRE, rows(s["sweep"], "p ≥")),
+            cc.fold("Against the free fact",
                     "depth auc %.2f vs %.2f" % (s["depth_auc"], s["auc"]),
                     "<p><code>depth</code> is on the line already and costs nothing. If it "
                     "separated the two kinds as well as the question does, the question would not "
                     "be worth a request.</p>" + rows(s["depth_sweep"], "depth ≥")),
-            fold("Every escape, with what he said next", "%d answered" % len(scored), quotes),
-            fold("Method and cost", "$%.4f · %d requests" % (s["cost_usd"], s["requests"]),
+            cc.fold("Every escape, with what he said next", "%d answered" % len(scored), quotes),
+            cc.fold("Method and cost", "$%.4f · %d requests" % (s["cost_usd"], s["requests"]),
                     method + "<p>%d input tokens at $%.3f/Mtok = $%.4f. Latency: median %d ms, "
                     "p95 %d ms, max %d ms.</p>"
                     % (s["input_tokens"], PRICE_PER_MTOK_IN, s["cost_usd"],

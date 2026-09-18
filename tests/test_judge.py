@@ -81,8 +81,13 @@ class StateBuilding(IsolatedHome):
         job = self.stop(TURN, "why is the history view stale? just answer")
         self.assertEqual(list(job["state"]), ["owner_asked", "reply", "tool_calls",
                                               "tool_call_count", "repeated_calls"])
-        self.assertEqual(job["state"]["reply"], "Let me look.", "the turn's prose, from the tail")
+        self.assertEqual(job["state"]["reply"],
+                         "Let me look.\n\n" + payload("stop")["last_assistant_message"],
+                         "the turn's prose from the tail, closed by the final message it lacked")
         self.assertEqual((job["state"]["tool_call_count"], job["state"]["repeated_calls"]), (1, 0))
+        older = {k: v for k, v in payload("stop").items() if k != "last_assistant_message"}
+        job = judge.prepare(dict(older, transcript_path=self.transcript(TURN, "t2.jsonl")))
+        self.assertEqual(job["state"]["reply"], "Let me look.", "no field: the tail alone")
 
     def test_a_stop_with_nothing_to_compare_asks_nothing(self) -> None:
         no_calls = self.stop([rec("user", TS, "explain it"), rec("assistant", TS, text("It is …"))],
@@ -115,16 +120,49 @@ class StateBuilding(IsolatedHome):
         self.assertEqual(job["facts"], {"interrupted": False, "depth": 0, "tool_calls": 0,
                                         "tail_error": "FileNotFoundError"})
         self.assertEqual(job["questions"], {})
-        self.assertEqual(self.stop([], "ask")["facts"], {"depth": 0, "tool_calls": 0},
+        self.assertEqual(self.stop([], "ask")["facts"],
+                         {"depth": 0, "tool_calls": 0, "wants_you": True},
                          "a transcript it read to the end has nothing to report")
 
-    def test_a_window_that_ran_out_says_so_rather_than_reading_as_a_quiet_turn(self) -> None:
-        """A prompt larger than the window leaves a torn fragment of one record and nothing else."""
-        huge = "x" * (transcript.TAIL_BYTES + 1000)
-        job = judge.prepare(dict(payload("user_prompt_submit"), prompt=huge,
-                                 transcript_path=self.transcript([rec("user", TS, huge)])))
+    def test_a_scan_that_ran_out_says_so_rather_than_reading_as_a_quiet_turn(self) -> None:
+        """A prompt larger than MAX_BYTES leaves a torn fragment of one record and nothing else."""
+        with mock.patch.object(transcript, "MAX_BYTES", 64 * 1024):
+            huge = "x" * (transcript.MAX_BYTES + 1000)
+            job = judge.prepare(dict(payload("user_prompt_submit"), prompt=huge,
+                                     transcript_path=self.transcript([rec("user", TS, huge)])))
         self.assertEqual(job["facts"], {"interrupted": False, "depth": 0, "tool_calls": 0,
                                         "tail_exhausted": True})
+
+    def test_a_background_agent_returning_is_not_his_prompt(self) -> None:
+        """Claude Code delivers a task-notification through UserPromptSubmit — half of all live
+        prompts (#17). It writes no line, and it never becomes the request a Stop is asked about."""
+        judge.prepare(payload("user_prompt_submit"))
+        note = "<task-notification>\n<task-id>a1</task-id>\n<result>done</result>\n</task-notification>"
+        self.assertIsNone(judge.prepare(dict(payload("user_prompt_submit"), prompt=note,
+                                             transcript_path=self.transcript(TURN))))
+        self.assertEqual(self.stop(TURN)["state"]["owner_asked"],
+                         payload("user_prompt_submit")["prompt"])
+
+    def test_his_message_that_starts_like_machinery_is_still_his(self) -> None:
+        """Dropping it would leave his previous request in the cache, and the next `jumped` would
+        be asked about the wrong message — the bug #17 fixed, the other way round."""
+        judge.prepare(payload("user_prompt_submit"))
+        his = "API Error: 529 overloaded. Retry the migration and tell me what broke."
+        job = judge.prepare(dict(payload("user_prompt_submit"), prompt=his,
+                                 transcript_path=self.transcript(TURN)))
+        self.assertEqual(job["state"], {"prompt": his})
+        self.assertEqual(self.stop(TURN)["state"]["owner_asked"], his)
+
+    def test_a_stop_reads_whether_it_wants_him_from_its_last_message(self) -> None:
+        """Wants you is read from the text, never asked (docs/signals.md), and never guessed."""
+        self.assertIs(self.stop(TURN, "ask")["facts"]["wants_you"], True,
+                      "the fixture ends 'Which one do you want?'")
+        done = judge.prepare(dict(payload("stop"), transcript_path=self.transcript(TURN),
+                                  last_assistant_message="Fixed in History.swift, tests pass."))
+        self.assertIs(done["facts"]["wants_you"], False)
+        older = {k: v for k, v in payload("stop").items() if k != "last_assistant_message"}
+        job = judge.prepare(dict(older, transcript_path=self.transcript(TURN)))
+        self.assertNotIn("wants_you", job["facts"], "a payload without the field is unknown, not a no")
 
     def test_the_prompt_cache_is_what_a_stop_compares_against(self) -> None:
         judge.prepare(payload("user_prompt_submit"))

@@ -8,6 +8,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from overmind import transcript
 from tests import MARKER, TS, rec, text, tool, transcript_file
@@ -115,34 +116,147 @@ class Tail(unittest.TestCase):
         path = self.write(self.turn() + ["[" * 100000 + "]" * 100000])
         self.assertEqual((transcript.tail(path)["depth"], transcript.tail(path)["error"]), (3, ""))
 
-    def test_the_window_bounds_the_read_and_the_counts_are_then_lower_bounds(self) -> None:
-        """Beyond TAIL_BYTES there is no reading: his message is out of sight, not searched for."""
+    def test_his_message_a_megabyte_back_is_reached(self) -> None:
+        """#17: tool results put his previous message past 256 KB for 18% of his prompts."""
         filler = rec("user", TS, [{"type": "tool_result", "content": "x" * 20000}])
         path = self.write([rec("user", TS, "the thing he asked for, long ago")]
+                          + [rec("assistant", TS, tool("Bash", command="ls")), filler] * 60)
+        self.assertGreater(os.path.getsize(path), 4 * transcript.CHUNK_BYTES)
+        last = transcript.tail(path, "and now?")
+        self.assertEqual((last["depth"], len(last["tool_calls"])), (60, 60))
+        self.assertEqual((last["exhausted"], last["owner_asked"]),
+                         (False, "the thing he asked for, long ago"))
+
+    def test_the_byte_cap_bounds_the_read_and_the_counts_are_then_lower_bounds(self) -> None:
+        """Beyond MAX_BYTES there is no reading: his message is out of sight, not searched for."""
+        filler = rec("user", TS, [{"type": "tool_result", "content": "x" * 2000}])
+        path = self.write([rec("user", TS, "the thing he asked for, long ago")]
                           + [rec("assistant", TS, text("step")), filler] * 40)
-        size = os.path.getsize(path)
-        self.assertGreater(size, transcript.TAIL_BYTES, "the fixture has to exceed the window")
-        last = transcript.tail(path)
+        with mock.patch.object(transcript, "MAX_BYTES", 20000), \
+                mock.patch.object(transcript, "CHUNK_BYTES", 3000):
+            last = transcript.tail(path)
         self.assertEqual(last["error"], "")
         self.assertGreater(last["depth"], 0)
-        self.assertLess(last["depth"], 40, "it stops at the window, it does not read the file")
+        self.assertLess(last["depth"], 40, "it stops at the cap, it does not read the file")
         self.assertIs(last["exhausted"], True, "it never reached his message: these are lower bounds")
-        lines, cut = transcript.window(path)
-        self.assertLessEqual(sum(len(line) + 1 for line in lines), transcript.TAIL_BYTES)
-        self.assertLessEqual(len(lines), transcript.MAX_LINES, "bytes bound the read, lines the parse")
-        self.assertIs(cut, True)
+
+    def test_the_line_cap_bounds_the_scan_whatever_the_lines_look_like(self) -> None:
+        """One-token lines cost per line, not per byte: 8 MB of them is seconds uncapped."""
+        path = self.write([rec("user", TS, "the thing he asked for")]
+                          + ["{}"] * (2 * transcript.MAX_LINES) + self.turn()[1:])
+        last = transcript.tail(path)
+        self.assertIs(last["exhausted"], True)
+        self.assertEqual(last["depth"], 3, "the turn itself is still whole")
+        with mock.patch.object(transcript, "MAX_LINES", 0):
+            spent = transcript.tail(self.write(self.turn(), "s-2.jsonl"))
+        self.assertEqual((spent["depth"], spent["exhausted"]), (0, True),
+                         "a scan out of lines is exhausted, never a quiet turn")
+
+    def test_the_bound_is_work_so_the_same_file_gets_the_same_answer(self) -> None:
+        """The reach does not depend on how busy the machine is: one line more or less decides."""
+        path = self.write(self.turn([rec("assistant", TS, text("done"))]), end="")  # his is 6th
+        with mock.patch.object(transcript, "MAX_LINES", 6):
+            self.assertEqual(transcript.tail(path)["exhausted"], False)
+        with mock.patch.object(transcript, "MAX_LINES", 5):
+            self.assertEqual(transcript.tail(path)["exhausted"], True)
+
+    def test_a_giant_tool_result_in_the_turn_is_passed_without_being_held(self) -> None:
+        """#17's review: a 7 MB tool result three records back cost 17–61 ms and exhausted the
+        clocked scan every time. It is read past by its start and never joined whole."""
+        giant = rec("user", TS, [{"type": "tool_result", "tool_use_id": "t1",
+                                  "content": "x" * (7 * 1024 * 1024)}])
+        path = self.write([rec("user", TS, "screenshot the page"),
+                           rec("assistant", TS, tool("Bash", command="shot")), giant,
+                           rec("assistant", TS, text("done"))])
+        last = transcript.tail(path)
+        self.assertEqual((last["exhausted"], last["owner_asked"], last["depth"]),
+                         (False, "screenshot the page", 2))
+        with open(path, "rb") as handle:
+            kept = {size: len(line) for line, size in
+                    transcript.lines_back(handle, os.path.getsize(path))}
+        biggest = max(kept)
+        self.assertGreater(biggest, 7 * 1024 * 1024)
+        self.assertLessEqual(kept[biggest], 2 * transcript.CHUNK_BYTES, "its start, not the line")
+
+    def test_a_line_too_long_to_parse_that_is_not_a_tool_result_ends_the_scan(self) -> None:
+        """It might be his message; unparsed it cannot be told apart, so the scan says so."""
+        path = self.write([rec("user", TS, "the older request"),
+                           rec("assistant", TS, text("older")),
+                           rec("user", TS, "a paste " * 2000),
+                           rec("assistant", TS, text("reading your paste"))])
+        with mock.patch.object(transcript, "MAX_PARSED", 4096), \
+                mock.patch.object(transcript, "CHUNK_BYTES", 1024):
+            last = transcript.tail(path)
+        self.assertEqual((last["depth"], last["exhausted"], last["owner_asked"]), (1, True, ""),
+                         "never read past as a quiet line, never parsed")
+
+    def test_the_parse_budget_is_spent_across_lines_and_tool_results_cost_none_of_it(self) -> None:
+        """Eight records of 1 KB each need a parse; tool results between them never do."""
+        filler = rec("user", TS, [{"type": "tool_result", "content": "x" * 5000}])
+        steps = [rec("assistant", TS, text("step " * 200)), filler] * 8
+        path = self.write([rec("user", TS, "the thing he asked for")] + steps)
+        with mock.patch.object(transcript, "MAX_PARSED", 6000):
+            capped = transcript.tail(path)
+        self.assertEqual((capped["exhausted"], capped["depth"]), (True, 5))
+        with mock.patch.object(transcript, "MAX_PARSED", 10000):
+            self.assertEqual(transcript.tail(path)["owner_asked"], "the thing he asked for",
+                             "40 KB of tool results in the way, and none of it was parsed")
+
+    def test_a_stops_final_message_closes_the_reply_once(self) -> None:
+        """Claude Code writes the transcript behind the Stop hook: the payload's final message is
+        often not on disk yet, and sometimes it is."""
+        final = "Done — History.swift is fixed."
+        missing = transcript.tail(self.write(self.turn()), said=final)
+        self.assertEqual(missing["reply"], "Let me look at the coordinator.\n\n" + final)
+        written = transcript.tail(self.write(self.turn([rec("assistant", TS, text(final))]),
+                                             "s-2.jsonl"), said="  " + final + "\n")
+        self.assertEqual(written["reply"], missing["reply"], "on disk already: not twice")
+        self.assertEqual(transcript.tail(self.write(self.turn(), "s-3.jsonl"))["reply"],
+                         "Let me look at the coordinator.")
 
     def test_a_window_that_reached_the_start_of_the_file_is_not_exhausted(self) -> None:
-        """Nothing further back to read is not the same failure as a window that ran out."""
+        """Nothing further back to read is not the same failure as a scan that ran out."""
         last = transcript.tail(self.write([rec("assistant", TS, text("resumed, mid-thought"))]))
         self.assertEqual((last["depth"], last["exhausted"], last["owner_asked"]), (1, False, ""))
 
-    def test_more_lines_than_the_parser_reads_are_left_out_and_said_to_be_left_out(self) -> None:
-        path = self.write(["{}"] * (transcript.MAX_LINES + 50) + self.turn())
-        self.assertLess(os.path.getsize(path), transcript.TAIL_BYTES, "bytes are not the bound here")
-        lines, cut = transcript.window(path)
-        self.assertEqual((len(lines), cut), (transcript.MAX_LINES, True))
-        self.assertEqual(transcript.tail(path)["depth"], 3, "the turn itself is still whole")
+    def test_lines_come_back_whole_and_last_first_whatever_the_chunk(self) -> None:
+        lines = [b"a" * n for n in (0, 1, 5, 64, 3, 200, 0, 7)]
+        path = os.path.join(self.tmp.name, "lines.jsonl")
+        with open(path, "wb") as handle:
+            handle.write(b"\n".join(lines))
+        whole = [(line, len(line)) for line in lines[::-1]]
+        for chunk in (1, 2, 3, 7, 64, 1 << 20):
+            with open(path, "rb") as handle, mock.patch.object(transcript, "CHUNK_BYTES", chunk):
+                self.assertEqual(list(transcript.lines_back(handle, os.path.getsize(path))),
+                                 whole, "chunk %d" % chunk)
+        with open(path, "rb") as handle, mock.patch.object(transcript, "MAX_BYTES", 12), \
+                mock.patch.object(transcript, "CHUNK_BYTES", 5):
+            self.assertEqual(list(transcript.lines_back(handle, os.path.getsize(path))),
+                             [(b"a" * 7, 7), (b"", 0)],
+                             "the line the cap cuts through is never yielded")
+
+    def test_a_line_past_max_parsed_comes_back_as_its_start_and_its_true_size(self) -> None:
+        line = bytes(range(97, 123)) * 40  # 1,040 bytes, no newline in it
+        path = os.path.join(self.tmp.name, "long.jsonl")
+        with open(path, "wb") as handle:
+            handle.write(b"x\n" + line + b"\ny")
+        for chunk in (7, 64, 100):
+            with open(path, "rb") as handle, mock.patch.object(transcript, "CHUNK_BYTES", chunk), \
+                    mock.patch.object(transcript, "MAX_PARSED", 3 * chunk):
+                got = list(transcript.lines_back(handle, os.path.getsize(path)))
+            self.assertEqual([size for _, size in got], [1, len(line), 1], "chunk %d" % chunk)
+            start = got[1][0]
+            self.assertTrue(line.startswith(start) and chunk <= len(start) <= 2 * chunk,
+                            "chunk %d kept %d bytes" % (chunk, len(start)))
+
+    def test_a_tool_result_is_skipped_by_its_bytes_whatever_it_quotes(self) -> None:
+        """An agent reading transcripts returns the marker, and Bash returns `"interrupted":false`
+        on every call; neither is the owner pressing escape."""
+        quoted = rec("user", TS, [{"type": "tool_result", "content": MARKER + "] in a transcript"}],
+                     toolUseResult={"stdout": "", "interrupted": False})
+        path = self.write(self.turn([quoted, rec("assistant", TS, text("done"))]))
+        last = transcript.tail(path)
+        self.assertEqual((last["interrupted"], last["depth"], last["exhausted"]), (False, 4, False))
 
     def test_an_empty_file_and_a_file_of_junk_are_simply_empty(self) -> None:
         self.assertEqual(transcript.tail(self.write([], end=""))["depth"], 0)
@@ -151,6 +265,26 @@ class Tail(unittest.TestCase):
 
 class Records(unittest.TestCase):
     """The vocabulary the experiments read transcripts with, shared with the hook."""
+
+    def test_a_notification_is_the_whole_shape_and_nothing_he_typed(self) -> None:
+        """A background agent's return arrives as a prompt; his own message must never be taken
+        for one, or the prompt cache keeps his previous request and `jumped` asks about that."""
+        note = ("<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>\n"
+                "<result>done</result>\n</task-notification>")
+        self.assertTrue(transcript.is_notification(note), "bare, as the transcript and most "
+                                                          "payloads have it")
+        self.assertTrue(transcript.is_notification(
+            note + "\nFull transcript available at: /private/tmp/claude/tasks/a1.output"))
+        self.assertTrue(transcript.is_notification(
+            note + "\nRead the output file to retrieve the result: /var/folders/x/a1.output\n"))
+        self.assertTrue(transcript.is_notification(note + "\n" + note), "two at once")
+        for his in ("API Error: 500 from the server — what now?",
+                    "Caveat: this one is urgent, fix the parser",
+                    "<system-reminder> is showing in my output, why?",
+                    note + "\nand also check the parser",
+                    note + "\nFull transcript available at: x\nthen fix it",
+                    "<task-notification> without its closing tag, typed by hand"):
+            self.assertFalse(transcript.is_notification(his), his)
 
     def test_an_interruption_is_the_marker_or_the_id(self) -> None:
         self.assertTrue(transcript.is_interruption(json.loads(rec("user", TS, text(MARKER)))))

@@ -73,10 +73,11 @@ The discriminator is the **register of the message that follows the interrupt** 
 rule cannot read and Jev can. Every Correction is a labeled negative for free; every Nudge is a
 labeled non-event. This is what makes the calibration curve draw itself.
 
-**Live since #16.** On every `UserPromptSubmit` the hook reads the last 256 KB of the session
-transcript backwards to the owner's previous message — 96% of his 46 interruptions sit inside that
-window — and records `interrupted`, `depth` (assistant messages since he last spoke) and
-`tool_calls`, free, read and never judged. Only when `interrupted` is true does it pay for one
+**Live since #16.** On every `UserPromptSubmit` the hook reads the session transcript backwards
+to the owner's previous message — bounded by work, not time: 8 MB read, 5,000 lines, 3 MB
+parsed, which reach it for 99.7% of his prompts (#17, `tail-reach-2026-09-18_203657`) — and
+records `interrupted`, `depth` (assistant messages since he last spoke) and `tool_calls`, free,
+read and never judged. Only when `interrupted` is true does it pay for one
 question, `intervention`: **1.0 is a Correction, 0.0 a Nudge**, asked about the register of the
 message and nothing else. Depth sits beside the answer as a fact and is deliberately kept out of
 the state: a question able to read the length of what it judges will go on to measure the length,
@@ -205,7 +206,7 @@ different name. A state may not outlive the signal underneath it.
 
 | State | Rule (initial) | Reads as |
 |---|---|---|
-| **Wants you** | stopped, and the last line asks you something — read, not judged | "This tab needs me." |
+| **Wants you** | stopped, and its last paragraph to you asks you something — `wants_you` on the Stop line, read by `rules.wants_you`, never judged; 0.89 accurate on Stops it was not written on (#17), optimistic because the agent that wrote the rule also wrote the labels | "This tab needs me." |
 | **Working** | events in the last 10 minutes, and not wanting you | "Leave it alone." |
 | **Idle** | no events for 10 minutes to 2 hours | "Paused, or waiting for me without saying so." Dimmed, stays listed. |
 | **Quiet** | no events for 2 hours | Leaves the Now list. |

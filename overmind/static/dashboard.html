@@ -1,2 +1,1275 @@
-<!doctype html><meta charset="utf-8"><title>Overmind</title>
-<p>Overmind — dashboard page pending</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overmind</title>
+<!--
+  The live dashboard. Design contract: docs/design/prototypes/dashboard-v3.html (9987892); copy contract:
+  docs/signals.md. No data is embedded: the page polls /events and /sessions every 5 s, reads /labels once,
+  and posts one-key marks to /label. The present edge is now. The board's x40 replay does not ship.
+
+  THE LOG IS READ BY ITS FACTS, NOT BY ITS VERSION NUMBER.
+    v1 lines carry the old question keys and no interrupt facts; v2 lines carry interrupted / depth /
+    tool_calls / tail_exhausted / tail_error / wrong_room_why and the `intervention` answer. A prompt's
+    escape is KNOWN only when `interrupted` is true, or false with neither tail_exhausted nor tail_error.
+    Everything else is unknown, and an unknown never counts as a zero: a count with unknowns under it
+    prints a dash (none found) or ">=" (some found), and says how many prompts it could read.
+    Wants you rests on v1's needs_owner; v2 does not read it, so on a v2 stop it is unread, never "no".
+
+  THE FOUR CRITIC FIXES are marked FIX 1..4 where they live; the reserved headline slot is marked FIX 5.
+-->
+<script src="/vendor/plotly.min.js"></script>
+<style>
+:root{
+  --paper:#FAF9F5; --surface:#FFFFFF; --fill:#F0EEE6;
+  --ink:#141413; --sec:#6B6B68; --line:#E5E3DC;
+  --coral:#D97757; --rust:#A6472B;
+  --serif:Georgia,"Source Serif 4","Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;min-width:1280px;min-height:760px;overflow:hidden}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+     font-size:12px;-webkit-font-smoothing:antialiased}
+.app{height:100%;padding:14px 20px 12px;display:flex;flex-direction:column;gap:12px}
+
+/* ---------- header ---------- */
+header{height:40px;display:flex;align-items:baseline;gap:14px;flex:0 0 40px}
+.wordmark{font-family:var(--serif);font-size:21px;letter-spacing:-.01em}
+.hdr{margin-left:auto;display:flex;align-items:baseline;gap:12px}
+.clock{font-family:var(--mono);font-size:17px;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.rate{color:var(--sec);font-size:11px;font-family:var(--mono)}
+.rate.down{color:var(--rust)}
+
+/* ---------- frame ---------- */
+.frame{flex:1;display:grid;grid-template-columns:302px 1fr;gap:0;min-height:0}
+.band{min-height:0;display:flex;flex-direction:column}
+.band > h2{font-family:var(--sans);font-size:10.5px;font-weight:500;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--sec);padding:0 0 7px;
+  display:flex;align-items:baseline;gap:8px;flex:0 0 auto;white-space:nowrap}
+.band > h2 .r{margin-left:auto;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;color:var(--sec);
+  overflow:hidden;text-overflow:ellipsis}
+.ptitle{font-size:11px;font-weight:500;color:var(--sec);margin-bottom:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{font-family:var(--serif);font-size:15px;line-height:1.4;color:var(--sec);padding:4px 0}
+.empty b{font-weight:400;color:var(--ink)}
+
+/* ---------- verdict ----------
+   FIX 5. The alarm swap used to add a line and push the page down 33px. Both states now render the same
+   three rows at the same sizes; the calm state carries the second row as a hidden spacer. */
+.verdict{flex:0 0 auto;padding:1px 0 0}
+.vline{font-family:var(--serif);font-size:30px;line-height:1.12;letter-spacing:-.012em;
+  display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+.vline b{font-weight:400;font-variant-numeric:tabular-nums}
+.vline .w{color:var(--sec)}
+.vwants{color:var(--rust);display:flex;align-items:baseline;gap:11px}
+.vwants .blk{width:11px;height:23px;background:var(--rust);flex:0 0 11px;align-self:center}
+.vsmall{font-size:15px;line-height:1.3;color:var(--sec);margin-top:5px;font-family:var(--serif);white-space:nowrap}
+.vsmall b{font-weight:400;color:var(--ink);font-family:var(--mono);font-size:14px}
+.vsmall.spacer{visibility:hidden}
+.vfine{margin-top:7px;display:flex;gap:15px;align-items:baseline;font-size:10.5px;color:var(--sec);
+  white-space:nowrap;overflow:hidden;height:14px}
+.vfine b{font-weight:400;color:var(--ink);font-family:var(--mono)}
+
+/* ---------- rail ---------- */
+.rail{overflow:hidden;padding-right:14px;position:relative}
+.rail:after{content:'';position:absolute;right:0;top:0;width:1px;background:var(--line);height:var(--rh,100%)}
+.rail .rows{position:relative;flex:1;overflow:hidden}
+.crow{position:absolute;left:0;right:0;border-bottom:1px solid var(--line);
+  padding:10px 10px 9px 13px;cursor:pointer;overflow:hidden;
+  transition:transform .55s cubic-bezier(.4,0,.2,1),height .35s cubic-bezier(.4,0,.2,1),background-color .3s}
+@media (hover:hover){.crow:hover{background:rgba(240,238,230,.55)}}
+.crow.sel{background:var(--fill)}
+.crow:before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:transparent}
+.crow.sel:before{background:var(--coral)}
+.crow.wants:before{background:var(--rust);width:3px}
+.crow .n1{display:flex;align-items:baseline;gap:6px}
+.cname{font-family:var(--serif);font-size:15px;line-height:1.1;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:176px}
+.crow.slim .cname{font-size:13.5px;color:var(--sec)}
+.crow.slim .spark,.crow.slim .dots{display:none}
+.cproj{font-size:10.5px;color:var(--sec);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cproj .c1{color:var(--rust);font-family:var(--sans)}
+.state{margin-left:auto;font-size:10.5px;white-space:nowrap}
+.state.wants{color:var(--paper);background:var(--rust);padding:2px 7px 3px;font-size:11px;letter-spacing:.01em}
+.state.work{color:var(--ink)}
+.state.idle,.state.quiet{color:var(--sec)}
+.n2{display:flex;align-items:baseline;gap:6px;margin-top:3px;font-size:10.5px;color:var(--sec)}
+.n2 .el{margin-left:auto;font-family:var(--mono);white-space:nowrap;font-variant-numeric:tabular-nums}
+.spark{margin-top:9px;height:26px;width:100%;display:block}
+.dots{margin-top:8px;display:flex;flex-direction:column;gap:3px;font-size:10.5px;color:var(--sec);overflow:hidden}
+.dots span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dots b{font-weight:400;color:rgba(166,71,43,.78)}
+.dots .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:rgba(166,71,43,.50);
+  margin-right:4px;vertical-align:1px}
+.dots .c1,.dots .c1 b{color:var(--rust)}
+.dots .c1 .dot{background:var(--rust)}
+.dots .q .dot{background:rgba(107,107,104,.4)}
+.more{position:absolute;left:13px;right:14px;font-size:10.5px;color:var(--sec);padding-top:8px}
+.rail .empty{padding:8px 13px}
+
+/* ---------- main ---------- */
+.main{display:grid;grid-template-rows:auto 112px auto 1fr 150px;gap:12px;min-height:0;padding-left:16px;position:relative}
+#pulse{flex:1;min-height:0;position:relative}
+.band.nums{border-top:1px solid var(--line);padding-top:8px}
+/* FIX 1 / FIX 3: the shared vertical of the selected chat's Correction, from the Pulse's floor to the
+   parameter strip. Painted beneath every band, so an agent turn's white box passes over it. */
+#vlines{position:absolute;inset:0;z-index:-1;pointer-events:none}
+#vlines i{position:absolute;width:1px;background:rgba(166,71,43,.5)}
+
+/* ---------- parameters ---------- */
+.band.params{min-height:126px}
+#params{flex:1;min-height:0;position:relative}
+#params svg{display:block;width:100%;height:100%}
+
+/* ---------- conversation ---------- */
+.band.conv{overflow:hidden;position:relative;max-height:306px}
+.scroll{flex:1;overflow:hidden;padding:3px 4px 4px 0}
+.spine{position:absolute;left:353px;top:0;bottom:0;width:1px;background:var(--line)}
+.turn{position:relative;display:grid;grid-template-columns:344px 18px 1fr}
+.mark{position:absolute;left:350.5px;top:5px;width:7px;height:7px;border-radius:50%;
+  background:var(--surface);border:1px solid rgba(20,20,19,.35)}
+.mark.me{background:var(--coral);border-color:var(--coral)}
+.mecell{grid-column:1;text-align:right;padding:0 16px 12px 0}
+.agcell{grid-column:3;padding:0 0 12px 16px}
+.full{grid-column:1/-1}
+.who{font-size:10px;letter-spacing:.04em;color:var(--coral);margin-bottom:3px}
+.who span{color:var(--sec);font-family:var(--mono);margin-left:6px}
+.me.sys .who{color:var(--sec)}
+.me .txt{font-family:var(--serif);font-size:13.5px;line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.agbox{border:1px solid var(--line);background:var(--surface);padding:8px 11px 9px;max-width:690px;position:relative}
+.agbox.live{border-left:2px solid var(--coral);padding-left:10px}
+.agmeta{display:flex;align-items:baseline;gap:9px;font-size:10.5px;color:var(--sec);font-family:var(--mono)}
+.agmeta > span{white-space:nowrap;flex:0 0 auto}
+.agmeta .ext{flex:0 1 auto;height:3px;background:rgba(20,20,19,.22);display:inline-block;min-width:2px;align-self:center}
+.agbox.live .agmeta .ext{background:var(--coral)}
+.agmeta .run{color:var(--coral)}
+.agtxt{font-size:11.5px;color:var(--sec);margin-top:5px;line-height:1.4;max-width:660px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sigs{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.sig{font-size:10.5px;color:rgba(166,71,43,.80);border:1px solid rgba(166,71,43,.26);padding:1px 6px}
+.sig.q{color:var(--sec);border-color:var(--line)}
+.mk{color:var(--coral);margin-left:6px}
+.gap{font-size:10.5px;color:var(--sec);font-family:var(--mono);padding:0 0 14px;text-align:center}
+/* GEAR 1. A Correction: the 3px rule, and — FIX 3 — a node where the Pulse's vertical crosses it, with
+   the label and his words hanging from that node instead of from the far left edge. */
+.cut{position:relative;padding:4px 0 12px}
+.cut .rule{height:3px;background:var(--rust)}
+.cut .node{position:absolute;top:0;width:11px;height:11px;margin-left:-5.5px;border-radius:50%;background:var(--rust)}
+.cut .node.edge{border-radius:0;width:3px;height:15px;margin-left:-1.5px;top:-2px}
+.cut .lab{font-size:10.5px;color:var(--rust);letter-spacing:.03em;margin-top:6px}
+.cut .quote{font-family:var(--serif);font-style:italic;font-size:16.5px;color:var(--rust);margin-top:4px;line-height:1.32}
+.cut .noquote{font-size:11px;color:var(--sec);margin-top:3px}
+/* A Nudge is not a failure, and must not look like one: a coral hairline, his words in ink. */
+.nudge{padding:2px 0 12px}
+.nudge .rule{height:1px;background:rgba(217,119,87,.7)}
+.nudge .lab{font-size:10.5px;color:var(--coral);letter-spacing:.03em;margin-top:5px}
+.nudge .quote{font-family:var(--serif);font-size:13.5px;color:var(--ink);margin-top:3px}
+.nudge.unjudged .rule{background:var(--line)}
+.nudge.unjudged .lab{color:var(--sec)}
+
+/* ---------- numbers ---------- */
+.numsgrid{flex:1;display:grid;grid-template-columns:1fr 556px;gap:0;min-height:0}
+.statwrap{padding:0 24px 0 0;display:flex;flex-direction:column;min-height:0}
+.stats{display:flex;gap:0;margin-top:8px}
+.stat{flex:1;padding-right:16px}
+.stat .v{font-family:var(--serif);font-size:19px;line-height:1.05;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.stat .v.alert{color:var(--rust)}
+.stat .v.warn{color:rgba(166,71,43,.78)}
+.stat .k{font-size:11.5px;margin-left:6px}
+.stat .m{font-size:10.5px;color:var(--sec);margin-top:4px;line-height:1.35;font-family:var(--mono)}
+.classes{border-left:1px solid var(--line);padding:0 0 0 20px;display:flex;flex-direction:column}
+.erow{padding:4px 0 5px;border-bottom:1px solid var(--line)}
+.erow .e1{display:flex;align-items:baseline;gap:9px}
+.erow .en{font-size:13px}
+.erow .elift{font-family:var(--mono);font-size:12px;color:var(--ink);margin-left:auto}
+.erow .ekind{font-size:10.5px;color:var(--sec)}
+.erow .e2{font-size:10.5px;color:var(--sec);margin-top:2px;font-family:var(--mono);line-height:1.35}
+.trust{margin-top:auto;padding-top:7px;font-size:10.5px;color:var(--sec);line-height:1.45}
+
+/* ---------- tooltip ----------
+   FIX 4. The ground DIMS — ink at 15% — instead of bleaching to paper at 74%, so the board stays
+   legible behind the panel; the subject is raised above the scrim on its own paper; the leader names it.
+   The body is one sentence and one mono readout. */
+#scrim{position:fixed;inset:0;background:var(--ink);opacity:0;z-index:55;pointer-events:none;transition:opacity .12s}
+#scrim.on{opacity:.15}
+#leader{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:61;pointer-events:none;opacity:0;transition:opacity .12s}
+#leader.on{opacity:1}
+.tipsub{z-index:60}
+#tip{position:fixed;z-index:62;width:286px;background:var(--surface);border:1px solid var(--line);
+  box-shadow:0 2px 12px rgba(20,20,19,.10);padding:10px 12px 11px;pointer-events:none;opacity:0;transition:opacity .12s}
+#tip .l1{font-size:11.5px;line-height:1.45;color:var(--ink)}
+#tip .l2{font-family:var(--mono);font-size:10.5px;color:var(--sec);margin-top:7px;line-height:1.5;word-break:break-word}
+[data-tip]{cursor:default}
+.crow[data-tip]{cursor:pointer}
+.crow:focus-visible,.sig:focus-visible,.cut:focus-visible{outline:1px solid var(--coral);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.crow,#scrim,#leader,#tip{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="wordmark">Overmind</div>
+    <div class="hdr">
+      <span class="clock" id="clock">--:--:--</span>
+      <span class="rate" id="rate">reading the log…</span>
+    </div>
+  </header>
+
+  <div class="frame">
+    <section class="band rail">
+      <h2>Chats <span class="r" id="railcount"></span></h2>
+      <div class="rows" id="rows"></div>
+    </section>
+
+    <div class="main" id="main">
+      <div id="vlines"></div>
+      <section class="verdict" id="verdict"></section>
+
+      <section class="band">
+        <h2>Pulse &mdash; last 20 minutes, every chat <span class="r" id="pulsekey"></span></h2>
+        <div id="pulse"></div>
+      </section>
+
+      <section class="band conv">
+        <h2><span id="convtitle">Conversation</span> <span class="r" id="convmeta"></span></h2>
+        <div class="scroll" id="scroll"></div>
+      </section>
+
+      <section class="band params">
+        <h2><span id="paramtitle">Parameters</span> <span class="r" id="parammeta"></span></h2>
+        <div id="params"></div>
+      </section>
+
+      <section class="band nums">
+        <div class="numsgrid">
+          <div class="statwrap">
+            <div class="ptitle" id="statstitle"></div>
+            <div class="stats" id="stats"></div>
+          </div>
+          <div class="classes">
+            <div class="ptitle">What the judge has earned &middot; two of nine questions</div>
+            <div id="earned"></div>
+            <div class="trust" id="trust"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+<div id="scrim"></div>
+<svg id="leader"><path id="leaderline" fill="none" stroke="rgba(20,20,19,.45)" stroke-width="1"></path>
+  <circle id="leaderdot" r="2.5" fill="rgba(20,20,19,.55)"></circle></svg>
+<div id="tip" role="tooltip"><div class="l1"></div><div class="l2"></div></div>
+<script>
+'use strict';
+/* ---------- constants ---------- */
+const WIN = 20 * 60e3;          // the Pulse and the parameter strip
+const IDLE = 10 * 60e3;         // Working -> Idle
+const QUIET = 2 * 3600e3;       // Idle -> Quiet
+const POLL_MS = 5000;
+const OVERLAP = 60e3;           // the hook appends after its Jev call, so a line can land behind the newest ts
+const FIRE = 0.5;               // where a signal fires; thresholds are phase 2's to set from labels
+const GUT = 150, MR = 10;       // one x geometry for the Pulse and the parameter strip
+const PARAMS_MIN = 126;
+
+/* What survived the truncation-matched control: docs/signals.md "What survived measurement";
+   experiments/results/conduct-classes-2026-09-17_230813 — 19 corrections against 209 matched clean turns. */
+const RUN = {corrections: 19, matched: 209};
+const EARNED = [
+  {n: 'Acting, not answering', q: 'jumped', kind: 'model question',
+   means: 'you asked a question and it started doing work instead', corr: 58, clean: 20, lift: '+38 pp'},
+  {n: 'Touching the wrong thing', q: 'wrong_room', kind: 'rule, in code',
+   means: 'it touched something outside the task', corr: 21, clean: 2, lift: '+19 pp'}
+];
+const NOT_EARNED = [
+  ['Gone dark', '−6 pp'], ['Missing the point', '+11 pp'], ['Doing too much', '+10 pp'],
+  ['Talking too much', '+0 pp'], ['Claiming without proof', 'no ground truth'],
+  ['Going in circles', '−7 pp'], ['Caving instead of thinking', '−11 pp']
+];
+const KIND = {PreToolUse: 'tool', Stop: 'stop', SubagentStop: 'sub', UserPromptSubmit: 'user'};
+const WHY = {
+  v1: 'a v1 line, and v1 never recorded escapes',
+  exhausted: 'the tail window ran out before your previous message',
+  tail: 'the transcript could not be read',
+  none: 'the line carries no interrupt facts'
+};
+const WORD = {y: 'right', n: 'wrong', s: 'skip'};
+const RANK = {'Wants you': 0, 'Working': 1, 'Idle': 2, 'Quiet': 3};
+const CLS = {'Wants you': 'wants', 'Working': 'work', 'Idle': 'idle', 'Quiet': 'quiet'};
+
+/* ---------- state ---------- */
+const S = {ev: new Map(), list: [], maxT: 0, sess: {}, labels: [], lastEver: null, loaded: false,
+           okAt: 0, failSince: 0};
+let NOW = Date.now();
+let sel = new URLSearchParams(location.search).get('chat') || '';
+let CH = [], BYID = {}, GLOBALMAX = 1;
+const LBL = new Map();          // event ts|session|question -> latest label line
+const LT = new Map();           // label targets: id -> {q, evs}
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\|/g, '/');
+}
+function tipAttr(a, b) { return 'data-tip="' + esc(a) + '|' + esc(b) + '"'; }
+const p2 = n => String(n).padStart(2, '0');
+function clock(ms) { const d = new Date(ms); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); }
+function hhmm(ms) { return clock(ms).slice(0, 5); }
+function dur(ms) {
+  let s = Math.max(0, Math.round(ms / 1000)); if (s < 60) return s + 's';
+  const m = Math.floor(s / 60), r = s % 60; if (m < 60) return m + 'm ' + p2(r) + 's';
+  return Math.floor(m / 60) + 'h ' + p2(m % 60) + 'm';
+}
+function plural(n, w, ws) { return n + ' ' + (n === 1 ? w : (ws || w + 's')); }
+function dayStart(ms) { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function iso(ms) { return new Date(ms).toISOString().replace('Z', '+00:00'); }  // the log's own ts format
+function X(ms) {  // a local wall-clock string for Plotly, which draws a zone-less date exactly as written
+  const d = new Date(ms);
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + clock(ms)
+    + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+function when(ms) {
+  if (ms >= dayStart(NOW)) return 'at ' + hhmm(ms);
+  return new Date(ms).toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short'}) + ', ' + hhmm(ms);
+}
+function trunc(s, n) { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+function basename(p) { return String(p || '').replace(/\/+$/, '').split('/').pop() || ''; }
+function ans(e, q) { const v = e.a[q]; return typeof v === 'number' && isFinite(v) ? v : null; }
+function f2(v) { return v == null ? '—' : v.toFixed(2); }
+/* A count with unknowns under it: a dash when none was found, ">=" when some were. Never a false zero. */
+function known(k, unknown) { return unknown > 0 ? (k > 0 ? '≥' + k : '—') : String(k); }
+function textOf(e, key) { return e.state && typeof e.state[key] === 'string' ? e.state[key] : ''; }
+
+/* ---------- reading the log ---------- */
+function norm(x) {
+  if (!x || typeof x !== 'object' || typeof x.ts !== 'string' || typeof x.session_id !== 'string') return null;
+  const t = Date.parse(x.ts);
+  if (!isFinite(t)) return null;
+  return {
+    key: x.ts + '|' + x.session_id + '|' + x.event, ts: x.ts, t: t, sid: x.session_id,
+    ev: String(x.event || ''), k: KIND[x.event] || 'other', v: typeof x.v === 'number' ? x.v : null,
+    a: x.answers && typeof x.answers === 'object' ? x.answers : {},
+    err: x.error ? String(x.error) : '', cwd: typeof x.cwd === 'string' ? x.cwd : '',
+    interrupted: typeof x.interrupted === 'boolean' ? x.interrupted : null,
+    depth: typeof x.depth === 'number' ? x.depth : null,
+    tools: typeof x.tool_calls === 'number' ? x.tool_calls : null,
+    exhausted: x.tail_exhausted === true, tailErr: x.tail_error ? String(x.tail_error) : '',
+    whyRoom: typeof x.wrong_room_why === 'string' ? x.wrong_room_why : '',
+    state: x.state && typeof x.state === 'object' ? x.state : null
+  };
+}
+/* Whether he pressed escape before this prompt. `interrupted: true` is a fact even when the window ran
+   out (the marker was inside it); `false` is only a fact when the tail reached his previous message. */
+function escOf(e) {
+  if (e.interrupted === true) {
+    const p = ans(e, 'intervention');
+    return {known: true, hit: true, p: p, kind: p == null ? 'Escape' : p >= FIRE ? 'Correction' : 'Nudge'};
+  }
+  if (e.interrupted === false && !e.exhausted && !e.tailErr) return {known: true, hit: false};
+  return {known: false, why: e.interrupted == null ? (e.v === 1 ? 'v1' : 'none') : e.exhausted ? 'exhausted' : 'tail'};
+}
+function windowStart() { return Math.min(dayStart(NOW), NOW - QUIET); }
+function merge(lines) {
+  if (!Array.isArray(lines)) throw new Error('/events did not return a list');
+  let added = 0;
+  for (const x of lines) {
+    const e = norm(x);
+    if (!e || S.ev.has(e.key)) continue;
+    S.ev.set(e.key, e); added++;
+    if (e.t > S.maxT) S.maxT = e.t;
+  }
+  const w0 = windowStart(); let pruned = 0;
+  for (const [k, e] of S.ev) if (e.t < w0) { S.ev.delete(k); pruned++; }
+  if (added || pruned) S.list = Array.from(S.ev.values()).sort((a, b) => a.t - b.t);
+  return added;
+}
+function indexLabels() {
+  LBL.clear();
+  for (const l of S.labels) if (l && l.event_ts) LBL.set(l.event_ts + '|' + l.session_id + '|' + l.question, l);
+}
+function labelOf(e, q) { return LBL.get(e.ts + '|' + e.sid + '|' + q) || null; }
+
+/* ---------- chats ---------- */
+function build() {
+  const d0 = dayStart(NOW), by = {};
+  for (const e of S.list) (by[e.sid] || (by[e.sid] = [])).push(e);
+  CH = []; BYID = {};
+  for (const id in by) {
+    const all = by[id], last = all[all.length - 1], day = all.filter(e => e.t >= d0);
+    if (!day.length && NOW - last.t > QUIET) continue;
+    const ss = S.sess[id] || {};
+    let cwd = ''; for (let i = all.length - 1; i >= 0 && !cwd; i--) cwd = all[i].cwd;
+    const c = {id: id, all: all, day: day, last: last, first: day.length ? day[0].t : last.t,
+               name: ss.name || 'session ' + id.slice(0, 8), proj: cwd || basename(ss.cwd) || '?',
+               short: id.slice(0, 8)};
+    all.forEach(e => { if (e.k === 'user') e.esc = escOf(e); });
+    c.prompts = day.filter(e => e.k === 'user');
+    c.escapes = []; c.U = 0; c.why = {};
+    for (const e of c.prompts) {
+      if (!e.esc.known) { c.U++; c.why[e.esc.why] = (c.why[e.esc.why] || 0) + 1; }
+      else if (e.esc.hit) c.escapes.push(e);
+    }
+    c.cuts = c.escapes.filter(e => e.esc.kind === 'Correction');
+    c.K = c.cuts.length;
+    c.N = c.escapes.filter(e => e.esc.kind === 'Nudge').length;
+    c.X = c.escapes.filter(e => e.esc.kind === 'Escape').length;
+    c.bash = day.filter(e => e.k === 'tool');
+    c.bashJ = c.bash.filter(e => ans(e, 'risky') != null);
+    c.risky = c.bashJ.filter(e => ans(e, 'risky') >= FIRE);
+    c.stops = day.filter(e => e.k === 'stop');
+    c.jumpJ = c.stops.filter(e => ans(e, 'jumped') != null);
+    c.jumpF = c.jumpJ.filter(e => ans(e, 'jumped') >= FIRE);
+    c.roomJ = c.stops.filter(e => ans(e, 'wrong_room') != null);
+    c.roomF = c.roomJ.filter(e => ans(e, 'wrong_room') >= FIRE);
+    c.v1 = day.some(e => e.v === 1);
+    c.words = day.some(e => e.state);
+    /* run state — every rule is read, none is judged */
+    const sil = NOW - last.t, needs = last.k === 'stop' ? ans(last, 'needs_owner') : null;
+    c.stopUnread = last.k === 'stop' && needs == null;
+    if (sil > QUIET) { c.state = 'Quiet'; c.since = last.t; c.why = 'no events for over two hours'; }
+    else if (needs != null && needs >= FIRE) {
+      c.state = 'Wants you'; c.since = last.t;
+      c.why = 'it stopped and its last line asks you something, read from a v1 line';
+    } else if (sil >= IDLE) { c.state = 'Idle'; c.since = last.t; c.why = 'no events for ' + dur(sil); }
+    else {
+      c.state = 'Working';
+      let j = all.length - 1; while (j > 0 && all[j].t - all[j - 1].t < IDLE) j--;
+      c.since = all[j].t;
+      c.why = c.stopUnread ? 'it had events in the last ten minutes and then stopped, and a v2 stop does not read whether it asks you'
+                           : 'events in the last ten minutes, and it has not stopped on a question';
+    }
+    c.turns = turnsOf(c, day.length ? day : all);
+    CH.push(c); BYID[id] = c;
+  }
+  GLOBALMAX = 8;
+  for (const c of CH) {
+    const m = new Map();
+    for (const e of c.day) { const b = Math.floor(e.t / 60e3); m.set(b, (m.get(b) || 0) + 1); }
+    for (const v of m.values()) if (v > GLOBALMAX) GLOBALMAX = v;
+  }
+  if (!BYID[sel] && CH.length) {  /* with no chats yet, a chat named in the URL waits for its data */
+    const pref = sel && CH.find(c => c.id.startsWith(sel));
+    const wants = CH.find(c => c.state === 'Wants you');
+    const recent = CH.slice().sort((a, b) => b.last.t - a.last.t)[0];
+    sel = pref ? pref.id : wants ? wants.id : recent ? recent.id : '';
+  }
+}
+/* A turn opens on his prompt and closes on the agent's stop. Events before the first prompt of the day,
+   or after a stop with no prompt between, are the agent running on its own. */
+function turnsOf(c, evs) {
+  const out = []; let cur = null;
+  for (const e of evs) {
+    if (e.k === 'user') {
+      if (cur && cur.t1 == null) { cur.t1 = e.t; cur.endedBy = e; }
+      cur = {t0: e.t, t1: null, kind: 'owner', open: e, evs: [], stop: null, endedBy: null};
+      out.push(cur); continue;
+    }
+    if (!cur || cur.t1 != null) {
+      cur = {t0: e.t, t1: null, kind: 'resume', open: null, evs: [], stop: null, endedBy: null};
+      out.push(cur);
+    }
+    cur.evs.push(e);
+    if (e.k === 'stop') { cur.stop = e; cur.t1 = e.t; }
+  }
+  out.forEach((t, i) => {
+    const lastEv = t.evs.length ? t.evs[t.evs.length - 1].t : t.t0;
+    t.live = t.t1 == null && i === out.length - 1 && c.state === 'Working';
+    t.tEnd = t.stop ? t.stop.t : t.live ? NOW : lastEv;
+    t.bash = t.evs.filter(e => e.k === 'tool');
+    t.subs = t.evs.filter(e => e.k === 'sub').length;
+    t.risky = t.bash.filter(e => ans(e, 'risky') != null && ans(e, 'risky') >= FIRE);
+    t.errs = t.evs.filter(e => e.err).length;
+  });
+  return out;
+}
+
+/* ---------- fetching ---------- */
+async function getJSON(url) {
+  const r = await fetch(url, {cache: 'no-store'});
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  return r.json();
+}
+async function poll() {
+  NOW = Date.now();
+  try {
+    const since = iso(S.maxT ? Math.max(windowStart(), S.maxT - OVERLAP) : windowStart());
+    const [lines, sess] = await Promise.all([getJSON('/events?since=' + encodeURIComponent(since)), getJSON('/sessions')]);
+    merge(lines);
+    const m = {};
+    if (Array.isArray(sess)) for (const s of sess) {
+      if (!s || typeof s.session_id !== 'string') continue;
+      const o = m[s.session_id] || (m[s.session_id] = {});
+      if (s.name) o.name = s.name; if (s.cwd) o.cwd = s.cwd;
+    }
+    S.sess = m;
+    if (!S.loaded) {
+      S.labels = await getJSON('/labels').catch(() => []);
+      if (!Array.isArray(S.labels)) S.labels = [];
+      indexLabels();
+    }
+    if (!S.list.length && !S.lastEver) {
+      const tail = await getJSON('/events?limit=1');
+      S.lastEver = Array.isArray(tail) && tail.length ? norm(tail[0]) : null;
+    }
+    S.loaded = true; S.okAt = Date.now(); S.failSince = 0;
+  } catch (err) {
+    if (!S.failSince) S.failSince = Date.now();
+  }
+  renderAll(false);
+  setTimeout(poll, POLL_MS);
+}
+
+/* ---------- verdict ---------- */
+function renderVerdict() {
+  const el = $('#verdict');
+  if (!CH.length) {
+    const last = S.lastEver;
+    const lastTxt = !S.loaded ? 'Reading the log.' : last
+      ? 'The last event was ' + when(last.t) + ', in ' + ((S.sess[last.sid] || {}).name || 'session ' + last.sid.slice(0, 8)) + '.'
+      : 'The log is empty: no hook has written a line yet.';
+    el.innerHTML = '<div class="vline"><span ' + tipAttr('Nothing has fired a hook since midnight, so there is no day to count yet.',
+      last ? 'last line ' + last.ts + ' · ' + last.ev : 'events.jsonl has no lines') + '>No events today</span></div>'
+      + '<div class="vfine"><span>' + esc(lastTxt) + '</span></div><div class="vsmall spacer">&nbsp;</div>';
+    return;
+  }
+  let K = 0, U = 0, P = 0, clean = 0, unk = 0, f = 0, n = 0, E = 0; const why = {}, where = [];
+  CH.forEach(c => {
+    K += c.K; U += c.U; P += c.prompts.length; E += c.day.length; f += c.risky.length; n += c.bashJ.length;
+    for (const k in c.why) why[k] = (why[k] || 0) + c.why[k];
+    c.cuts.forEach(e => where.push(hhmm(e.t) + ' ' + c.name));
+    if (c.K === 0 && c.U === 0 && c.X === 0) clean++; else if (c.K === 0) unk++;
+  });
+  const N = CH.length, first = Math.min.apply(null, CH.map(c => c.first));
+  /* FIX 2. The headline counts only what the body shows: every Correction here is a mark on its chat's
+     lane in the Pulse (or on that lane's left edge when it is older than the window) and a line in its
+     chat's rail row, and every chat here is a row in the rail. */
+  const cleanTxt = unk ? clean + '–' + (clean + unk) + ' of ' + N : clean + ' of ' + N;
+  const whyTxt = Object.keys(why).map(k => why[k] + ' ' + WHY[k]).join(' · ');
+  const day = '<span ' + tipAttr(
+      'How many chats ran today, how many times you stopped one because it was going wrong, and how many needed nothing from you.',
+      (where.length ? where.sort().join(' · ') : 'no Correction found') + ' · escapes read on ' + (P - U) + ' of ' + P + ' prompts'
+        + (U ? ' (' + whyTxt + ')' : '') + ' · ' + clean + ' of ' + N + ' chats read end to end with no Correction'
+        + (unk ? ', ' + unk + ' more with prompts that could not be read' : ''))
+    + '><b>' + N + '</b> <span class="w">' + (N === 1 ? 'chat' : 'chats') + '</span> · <b>' + known(K, U)
+    + '</b> <span class="w">Correction' + (K === 1 ? '' : 's') + '</span> · <b>' + cleanTxt
+    + '</b> <span class="w">clean runs</span></span>';
+  const fine = '<div class="vfine"><span>today, every chat, since ' + hhmm(first) + '</span>'
+    + (U ? '<span ' + tipAttr('A prompt whose escape could not be read is unknown, not clean, so it keeps the Correction count open.',
+        (P - U) + ' of ' + P + ' prompts read · ' + whyTxt) + '>escapes read on <b>' + (P - U) + ' of ' + P + '</b> prompts</span>' : '')
+    + '<span ' + tipAttr('About to break something, fired, across every chat today: a hook rule over the command, not a conduct class.',
+        f + ' fired of ' + n + ' Bash calls judged before they ran = ' + (n ? Math.round(100 * f / n) : 0) + '%')
+    + '><b>' + f + '</b> near miss' + (f === 1 ? '' : 'es') + ' of ' + plural(n, 'Bash call') + '</span>'
+    + '<span ' + tipAttr('Every hook line written today, judged or not.', E + ' lines since ' + hhmm(first) + ' · read every 5 s')
+    + '><b>' + E + '</b> event' + (E === 1 ? '' : 's') + '</span></div>';
+  const wants = CH.filter(c => c.state === 'Wants you');
+  if (wants.length) {
+    const nm = wants.map(c => c.name).join(', ');
+    el.innerHTML = '<div class="vline vwants" ' + tipAttr(
+        (wants.length === 1 ? nm + ' stopped' : wants.length + ' chats stopped') + ' and the last line asks you something, read from the text and never judged.',
+        wants.map(c => c.name + ' · ' + c.proj + ' · stopped ' + clock(c.since)).join(' · '))
+      + '><span class="blk"></span>' + esc(nm) + (wants.length === 1 ? ' wants you' : ' want you') + '</div>'
+      + '<div class="vsmall">' + day + '</div>' + fine;
+  } else {
+    el.innerHTML = '<div class="vline">' + day + '</div>' + fine + '<div class="vsmall spacer">&nbsp;</div>';
+  }
+}
+
+/* ---------- rail ---------- */
+const rowsEl = $('#rows'), ROWS = {};
+function makeRow(id) {
+  const d = document.createElement('div');
+  d.className = 'crow'; d.tabIndex = 0; d.setAttribute('role', 'button');
+  d.innerHTML = '<div class="n1"><span class="cname"></span><span class="state"></span></div>'
+    + '<div class="n2"><span class="cproj"></span><span class="el"></span></div>'
+    + '<svg class="spark" viewBox="0 0 260 26" preserveAspectRatio="none"></svg><div class="dots"></div>';
+  d.addEventListener('click', () => select(id));
+  d.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); select(id); } });
+  rowsEl.appendChild(d);
+  return {el: d, name: d.querySelector('.cname'), state: d.querySelector('.state'), proj: d.querySelector('.cproj'),
+          elapsed: d.querySelector('.el'), spark: d.querySelector('.spark'), dots: d.querySelector('.dots')};
+}
+function sparkPath(c, strong) {
+  const bars = 20, w = 260 / bars, counts = new Array(bars).fill(0), a0 = NOW - WIN;
+  for (const e of c.day) { if (e.t < a0 || e.t > NOW) continue; const b = Math.min(bars - 1, Math.floor((e.t - a0) / 60e3)); counts[b]++; }
+  const base = strong ? 'rgba(20,20,19,.34)' : 'rgba(20,20,19,.17)';
+  let out = '';
+  counts.forEach((n, b) => {
+    const h = n === 0 ? 0 : Math.max(3, Math.min(24, 24 * Math.sqrt(n / GLOBALMAX)));
+    if (h > 0) out += '<rect x="' + (b * w + .6).toFixed(1) + '" y="' + (25 - h).toFixed(1) + '" width="' + (w - 1.2).toFixed(1)
+      + '" height="' + h.toFixed(1) + '" fill="' + (b >= bars - 2 ? '#D97757' : base) + '"></rect>';
+  });
+  return out + '<line x1="0" y1="25.5" x2="260" y2="25.5" stroke="#E5E3DC" stroke-width="1"/>';
+}
+function corrLine(c) {
+  if (!c.K) return '';
+  const t = c.cuts.map(e => hhmm(e.t));
+  return c.K === 1 ? '1 Correction, ' + t[0] : c.K + ' Corrections, last ' + t[t.length - 1];
+}
+function renderRail() {
+  for (const id in ROWS) if (!BYID[id]) { ROWS[id].el.remove(); delete ROWS[id]; }
+  let empty = rowsEl.querySelector('.empty'), more = rowsEl.querySelector('.more');
+  if (!CH.length) {
+    if (!empty) { empty = document.createElement('div'); empty.className = 'empty'; rowsEl.appendChild(empty); }
+    empty.textContent = S.loaded ? 'No chat has fired a hook today.' : 'Reading the log.';
+    if (more) more.remove();
+    $('#railcount').textContent = S.loaded ? 'none today' : '';
+    document.querySelector('.rail').style.setProperty('--rh', '0px');
+    return;
+  }
+  if (empty) empty.remove();
+  const order = CH.slice().sort((a, b) => (RANK[a.state] - RANK[b.state]) || (b.last.t - a.last.t));
+  const avail = rowsEl.clientHeight;
+  let y = 0, hidden = 0;
+  order.forEach(c => {
+    const r = ROWS[c.id] || (ROWS[c.id] = makeRow(c.id));
+    const wants = c.state === 'Wants you', slim = (c.state === 'Idle' || c.state === 'Quiet') && c.id !== sel;
+    const live20 = slim ? 0 : c.day.filter(e => e.t > NOW - WIN).length;
+    const chips = [];
+    if (!slim) {
+      if (c.K) chips.push('<span class="c1"><span class="dot"></span><b>' + c.K + '</b> ' + corrLine(c).replace(/^\d+ /, '') + '</span>');
+      if (c.risky.length) chips.push('<span><span class="dot"></span><b>' + c.risky.length + '</b> near miss' + (c.risky.length === 1 ? '' : 'es')
+        + ' of ' + plural(c.bashJ.length, 'Bash call') + ', today</span>');
+      if (c.jumpF.length) chips.push('<span><span class="dot"></span>Acting, not answering <b>' + c.jumpF.length + '</b> of '
+        + plural(c.jumpJ.length, 'turn') + ', today</span>');
+      if (c.roomF.length) chips.push('<span><span class="dot"></span>Touching the wrong thing <b>' + c.roomF.length + '</b> of '
+        + plural(c.roomJ.length, 'turn') + ', today</span>');
+      if (c.U) chips.push('<span class="q"><span class="dot"></span>escapes read on ' + (c.prompts.length - c.U) + ' of '
+        + plural(c.prompts.length, 'prompt') + '</span>');
+    }
+    const h = 56 + (live20 ? 35 : 0) + (chips.length ? 8 + chips.length * 16 : 0);
+    const fits = y + h <= avail || y === 0;
+    r.el.style.display = fits ? '' : 'none';
+    if (!fits) { hidden++; return; }
+    r.el.style.transform = 'translateY(' + y + 'px)';
+    r.el.style.height = h + 'px';
+    r.el.classList.toggle('sel', c.id === sel);
+    r.el.classList.toggle('wants', wants);
+    r.el.classList.toggle('slim', slim);
+    r.name.textContent = c.name;
+    r.proj.innerHTML = esc(c.proj + ' · ' + c.short) + (slim && c.K ? ' · <span class="c1">' + esc(corrLine(c)) + '</span>' : '');
+    r.state.textContent = c.state;
+    r.state.className = 'state ' + CLS[c.state];
+    r.elapsed.textContent = 'for ' + dur(NOW - c.since);
+    r.spark.style.display = live20 ? 'block' : 'none';
+    if (live20) r.spark.innerHTML = sparkPath(c, wants || c.id === sel);
+    r.dots.innerHTML = chips.join('');
+    r.dots.style.display = chips.length ? 'flex' : 'none';
+    r.el.setAttribute('aria-label', c.name + ', ' + c.state);
+    r.el.setAttribute('data-tip', esc(c.name + ' is ' + c.state + ': ' + c.why + '.') + '|' + esc(
+      'since ' + clock(c.since) + ' = ' + dur(NOW - c.since) + ' · today: ' + plural(c.bash.length, 'Bash call') + ', '
+      + plural(c.stops.length, 'stop') + ', ' + plural(c.prompts.length, 'prompt') + ' · Corrections ' + known(c.K, c.U)
+      + (c.U ? ', escapes read on ' + (c.prompts.length - c.U) + ' of ' + c.prompts.length : '') + ' · ' + c.id));
+    y += h;
+  });
+  if (hidden) {
+    if (!more) { more = document.createElement('div'); more.className = 'more'; rowsEl.appendChild(more); }
+    more.style.top = y + 'px';
+    more.textContent = 'and ' + hidden + ' more below, idle or quiet';
+    y += 26;
+  } else if (more) more.remove();
+  const live = CH.filter(c => c.state !== 'Quiet').length, w = CH.filter(c => c.state === 'Wants you').length;
+  const unread = CH.filter(c => c.state !== 'Quiet' && c.stopUnread).length;
+  $('#railcount').textContent = live + ' live · ' + (w ? w + ' wants you' : unread ? 'Wants you unread on ' + unread : 'none wants you');
+  const railEl = document.querySelector('.rail');
+  railEl.style.setProperty('--rh', (rowsEl.offsetTop - railEl.offsetTop + y) + 'px');
+}
+function select(id) {
+  if (!BYID[id]) return;
+  sel = id;
+  const u = new URL(location.href); u.searchParams.set('chat', id.slice(0, 8)); history.replaceState(null, '', u);
+  renderAll(true);
+}
+
+/* ---------- pulse ---------- */
+const MONO = 'ui-monospace,SFMono-Regular,Menlo,monospace';
+const SANS = '-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif';
+let LANES = [], pulseReady = false, bandH = 112;
+function laneY(c) { return LANES.length - 1 - LANES.indexOf(c); }
+function pulseLanes() {
+  /* fixed order — by the chat's first event today — so a lane does not move under your eye */
+  let lanes = CH.slice().sort((a, b) => a.first - b.first);
+  if (lanes.length > 10) lanes = lanes.filter(c => c.id === sel || c.K || c.day.some(e => e.t > NOW - WIN));
+  return lanes;
+}
+/* a label target's id survives esc() unchanged, so the attribute and the map agree */
+function ltId(q, evs) { const id = (q + '~' + evs.map(e => e.ts + '~' + e.sid).join('~')).replace(/[&"<>|]/g, '_'); LT.set(id, {q: q, evs: evs}); return id; }
+function markText(lt) {
+  const done = lt.evs.filter(e => labelOf(e, lt.q));
+  if (lt.evs.length === 1) {
+    const l = labelOf(lt.evs[0], lt.q);
+    return !l ? 'not marked yet' : l.label === 's' ? 'you skipped it' : 'you marked it ' + WORD[l.label];
+  }
+  return done.length + ' of ' + lt.evs.length + ' marked';
+}
+function keysHint(lt) { return ' · ' + markText(lt) + ' · press y right, n wrong, s skip'; }
+function renderPulse() {
+  const host = $('#pulse');
+  if (!window.Plotly) { host.innerHTML = '<div class="empty">The Pulse draws with /vendor/plotly.min.js, and it did not load.</div>'; return; }
+  LANES = pulseLanes();
+  const n = Math.max(1, LANES.length);
+  const want = Math.round(Math.max(112, Math.min(170, 44 + 13 * (n + .3))));
+  if (want !== bandH) { bandH = want; $('#main').style.gridTemplateRows = 'auto ' + bandH + 'px auto 1fr 150px'; }
+  const W = host.clientWidth, H = host.clientHeight;
+  if (W < 50 || H < 30) return;
+  /* a lane is at most ~22px tall, so one chat does not fill the band with its selection tint */
+  const span = Math.max(n + .3, (H - 24) / 22), pad = (span - n - .3) / 2;
+  const ymin = -.65 - pad, ymax = n - .35 + pad, unit = (H - 24) / span;
+  const py = v => (v - ymin) / (ymax - ymin);
+  const t0 = NOW - WIN - 30e3;
+  const P = {sub: [], tool: [], risky: [], stop: [], you: [], ring: [], ringx: [], cut: []};
+  const add = (arr, e, y, a, b, lt) => arr.push({x: X(e.t), y: y, cd: [a, b, lt || '']});
+  const shapes = [], notes = [];
+  LANES.forEach(c => {
+    const y = laneY(c);
+    shapes.push({type: 'line', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: y, y1: y, line: {color: '#E5E3DC', width: 1}, layer: 'below'});
+    for (const e of c.day) {
+      if (e.t < t0) continue;
+      const ck = clock(e.t);
+      if (e.k === 'tool') {
+        const p = ans(e, 'risky'), cmd = textOf(e, 'command');
+        if (p != null && p >= FIRE) {
+          const lt = ltId('risky', [e]);
+          add(P.risky, e, y, 'About to break something: this command in ' + c.name + ' is hard to undo.',
+            ck + ' · judge ' + f2(p) + ', over the 0.50 line' + (cmd ? ' · ' + trunc(cmd, 58) : '') + keysHint(LT.get(lt)), lt);
+        } else add(P.tool, e, y, 'A Bash call in ' + c.name + ', scored before it ran.',
+          ck + ' · ' + (p == null ? 'not judged' + (e.err ? ': ' + e.err : '') : 'About to break something ' + f2(p) + ', under 0.50')
+            + (cmd ? ' · ' + trunc(cmd, 50) : ''));
+      } else if (e.k === 'sub') {
+        add(P.sub, e, y, 'A subagent returned to ' + c.name + '.', ck + ' · says done ' + f2(ans(e, 'claims_done')) + ', a v1 line');
+      } else if (e.k === 'stop') {
+        const no = ans(e, 'needs_owner');
+        add(P.stop, e, y, c.name + ' finished a turn.', ck + ' · ' + (no != null ? 'wants you ' + (no >= FIRE ? 'yes' : 'no') + ', a v1 line'
+          : 'wants you not read on a v2 line') + (e.depth != null ? ' · ' + (e.exhausted ? '≥' : '') + plural(e.depth, 'message') : ''));
+      } else if (e.k === 'user') {
+        const r = e.esc || escOf(e), txt = textOf(e, 'prompt');
+        if (r.hit && r.kind === 'Correction') {
+          const lt = ltId('intervention', [e]);
+          add(P.cut, e, y, 'A Correction in ' + c.name + ': you pressed escape and what you said next objected.',
+            ck + ' · intervention ' + f2(r.p) + ' · ' + (e.exhausted ? '≥' : '') + plural(e.depth || 0, 'assistant message') + ' in'
+              + (txt ? ' · “' + trunc(txt, 60) + '”' : '') + keysHint(LT.get(lt)), lt);
+          continue;
+        }
+        const who = txt ? 'You: “' + trunc(txt, 54) + '”' : 'You wrote into ' + c.name + '.';
+        const rd = r.hit ? (r.kind === 'Nudge' ? 'a Nudge, not a failure: intervention ' + f2(r.p) : 'an escape, not judged' + (e.err ? ': ' + e.err : ''))
+          : r.known ? 'no escape before it' : 'escape unknown: ' + WHY[r.why];
+        add(P.you, e, y, who, ck + ' · ' + rd);
+        if (r.hit) add(r.kind === 'Nudge' ? P.ring : P.ringx, e, y, r.kind === 'Nudge'
+          ? 'A Nudge in ' + c.name + ': you pressed escape to jump the queue, not to complain.'
+          : 'An escape in ' + c.name + ' that was not judged, so it is neither a Correction nor a Nudge.', ck + ' · ' + rd);
+      }
+    }
+    /* FIX 1. A Correction marks its own lane at lane weight; a hairline carries the vertical to the floor. */
+    const inWin = c.cuts.filter(e => e.t >= NOW - WIN), before = c.cuts.filter(e => e.t < NOW - WIN);
+    inWin.forEach(e => {
+      shapes.push({type: 'line', xref: 'x', yref: 'paper', x0: X(e.t), x1: X(e.t), y0: 0, y1: py(y - .46),
+        line: {color: 'rgba(166,71,43,.5)', width: 1}});
+      notes.push({x: X(e.t), y: y, xref: 'x', yref: 'y', text: 'Correction ' + hhmm(e.t), showarrow: false, xanchor: 'right',
+        yanchor: 'middle', xshift: -5, bgcolor: 'rgba(250,249,245,.92)', font: {family: SANS, size: 9.5, color: '#A6472B'}});
+    });
+    /* FIX 2. A Correction older than the window stays on its lane, at the left edge, with its time. */
+    if (before.length) {
+      const x2 = 2 / Math.max(1, W - GUT - MR);
+      shapes.push({type: 'line', xref: 'paper', yref: 'y', x0: x2, x1: x2, y0: y - .42, y1: y + .42, line: {color: '#A6472B', width: 3}});
+      const lastB = before[before.length - 1];
+      notes.push({x: 0, y: y, xref: 'paper', yref: 'y', showarrow: false, xanchor: 'left', yanchor: 'middle', xshift: 5,
+        text: '‹ ' + (before.length === 1 ? 'Correction ' + hhmm(lastB.t) : before.length + ' Corrections, last ' + hhmm(lastB.t)),
+        bgcolor: 'rgba(250,249,245,.92)', font: {family: SANS, size: 9.5, color: '#A6472B'}});
+    }
+  });
+  const sc = BYID[sel];
+  if (sc && LANES.includes(sc)) shapes.unshift({type: 'rect', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: laneY(sc) - .5, y1: laneY(sc) + .5,
+    fillcolor: 'rgba(217,119,87,.10)', line: {width: 0}, layer: 'below'});
+  shapes.push({type: 'line', xref: 'paper', yref: 'paper', x0: 1, x1: 1, y0: 0, y1: 1, line: {color: 'rgba(217,119,87,.65)', width: 1}});
+  if (!LANES.length) notes.push({x: .5, y: .5, xref: 'paper', yref: 'paper', showarrow: false,
+    text: S.loaded ? 'No chat has an event today.' : 'Reading the log.', font: {family: 'Georgia,serif', size: 14, color: '#6B6B68'}});
+  else if (!LANES.some(c => c.day.some(e => e.t >= NOW - WIN))) notes.push({x: .5, y: 1, xref: 'paper', yref: 'paper', yanchor: 'top',
+    showarrow: false, text: 'Nothing in these twenty minutes: every wire is a chat that did nothing.',
+    bgcolor: 'rgba(250,249,245,.92)', font: {family: 'Georgia,serif', size: 13, color: '#6B6B68'}});
+  const mk = (arr, name, m) => ({type: 'scatter', mode: 'markers', name: name, x: arr.map(p => p.x), y: arr.map(p => p.y),
+    customdata: arr.map(p => p.cd), marker: m, hoverinfo: 'none'});
+  const lw = Math.max(6, unit * .92);
+  const traces = [
+    mk(P.sub, 'subagent', {size: 4.5, color: 'rgba(107,107,104,.38)'}),
+    mk(P.tool, 'tool', {size: 5.5, color: 'rgba(107,107,104,.62)'}),
+    mk(P.stop, 'stop', {size: Math.min(13, unit), symbol: 'line-ns-open', color: 'rgba(20,20,19,.55)', line: {width: 1.4}}),
+    mk(P.you, 'you', {size: Math.min(15, unit * 1.15), symbol: 'line-ns-open', color: '#D97757', line: {width: 2}}),
+    mk(P.ring, 'nudge', {size: 8, symbol: 'circle-open', color: '#D97757', line: {width: 1.5}}),
+    mk(P.ringx, 'escape', {size: 8, symbol: 'circle-open', color: 'rgba(107,107,104,.8)', line: {width: 1.5}}),
+    mk(P.risky, 'near miss', {size: 6.5, color: 'rgba(166,71,43,.62)'}),
+    mk(P.cut, 'correction', {size: lw, symbol: 'line-ns-open', color: '#A6472B', line: {width: 3}})
+  ];
+  const layout = {
+    width: W, height: H, margin: {l: GUT, r: MR, t: 4, b: 20}, paper_bgcolor: '#FAF9F5', plot_bgcolor: '#FAF9F5',
+    showlegend: false, hovermode: 'closest', dragmode: false,
+    xaxis: {type: 'date', range: [X(NOW - WIN), X(NOW)], fixedrange: true, showline: false, zeroline: false,
+      showgrid: true, gridcolor: '#EBE8DF', tickformat: '%H:%M', dtick: 300000,
+      tickfont: {family: MONO, size: 9.5, color: '#6B6B68'}, ticks: 'outside', ticklen: 3, tickcolor: '#E5E3DC'},
+    yaxis: {range: [ymin, ymax], fixedrange: true, showgrid: false, zeroline: false, showline: false,
+      tickmode: 'array', tickvals: LANES.map(laneY), ticktext: LANES.map(c => trunc(c.name, 24)),
+      tickfont: {family: SANS, size: 10, color: '#6B6B68'}},
+    shapes: shapes, annotations: notes
+  };
+  Plotly.react(host, traces, layout, {displayModeBar: false, responsive: false, doubleClick: false, staticPlot: false});
+  if (!pulseReady) {
+    pulseReady = true;
+    host.on('plotly_hover', d => {
+      const pt = d.points && d.points[0]; if (!pt || !pt.customdata) return;
+      const xa = pt.xaxis, ya = pt.yaxis, r = host.getBoundingClientRect();
+      const px = r.left + xa._offset + xa.d2p(pt.x), pyy = r.top + ya._offset + ya.d2p(pt.y);
+      showTip(pt.customdata[0], pt.customdata[1], {left: px - 3, right: px + 3, top: pyy - 6, bottom: pyy + 6},
+        host, pt.customdata[2] ? LT.get(pt.customdata[2]) : null);
+    });
+    host.on('plotly_unhover', hideTip);
+  }
+}
+function slidePulse() {
+  if (pulseReady) Plotly.relayout('pulse', {'xaxis.range': [X(NOW - WIN), X(NOW)]});
+}
+function renderKey() {
+  const k = s => '<svg width="9" height="12" style="vertical-align:-2px;margin-right:3px">' + s + '</svg>';
+  const gap = '<span style="margin-left:13px"></span>';
+  $('#pulsekey').innerHTML = k('<line x1="4.5" y1="1" x2="4.5" y2="11" stroke="#D97757" stroke-width="2"/>') + 'you' + gap
+    + k('<line x1="4.5" y1="1" x2="4.5" y2="11" stroke="rgba(20,20,19,.55)" stroke-width="1.4"/>') + 'it stopped' + gap
+    + k('<line x1="4.5" y1="0" x2="4.5" y2="12" stroke="#A6472B" stroke-width="3"/>') + '<span style="color:#A6472B">Correction</span>' + gap
+    + k('<circle cx="4.5" cy="6" r="3.2" fill="none" stroke="#D97757" stroke-width="1.4"/>') + 'Nudge' + gap
+    + k('<circle cx="4.5" cy="6" r="2.8" fill="rgba(107,107,104,.62)"/>') + 'Bash call' + gap
+    + k('<circle cx="4.5" cy="6" r="3.3" fill="rgba(166,71,43,.62)"/>') + 'near miss';
+}
+
+/* ---------- conversation ---------- */
+const scroll = $('#scroll');
+let convKey = '';
+function extent(ms) { return Math.max(3, Math.min(300, ms / 2000)); }
+/* The band never scrolls and never cuts a box in half: whole turns leave off the old end until what is
+   left fits. The chat's latest Correction is pinned — it is the one label the system gets for free. Older
+   ones may leave; the rail row, the Pulse's lane edge and the strip still carry them. */
+function fitConv(nturns) {
+  const body = scroll.firstElementChild;
+  if (!body) return nturns;
+  const kids = [].slice.call(body.children).filter(e => e.classList.contains('turn'));
+  let i = 0;
+  while (scroll.scrollHeight > scroll.clientHeight + 1 && i < kids.length - 1) {
+    const g = kids[i].getAttribute('data-t'); let j = i;
+    while (j < kids.length && kids[j].getAttribute('data-t') === g) { if (!kids[j].querySelector('.cut.pin')) kids[j].style.display = 'none'; j++; }
+    if (j >= kids.length) { for (let k = i; k < kids.length; k++) kids[k].style.display = ''; break; }
+    i = j;
+  }
+  while (i < kids.length - 1 && kids[i].querySelector('.gap')) { kids[i].style.display = 'none'; i++; }
+  const vis = kids.filter(k => k.style.display !== 'none');
+  for (let z = 0; z < vis.length && scroll.scrollHeight > scroll.clientHeight + 1; z++) {
+    const tx = vis[z].querySelector('.agtxt'); if (tx) tx.style.display = 'none';
+  }
+  return kids.filter(k => k.style.display !== 'none' && k.querySelector('.agbox')).length;
+}
+function sig(lt, label, a, b) {
+  return '<span class="sig" tabindex="0" data-lt="' + esc(lt) + '" ' + tipAttr(a, b + keysHint(LT.get(lt))) + '>' + label
+    + (LT.get(lt).evs.some(e => labelOf(e, LT.get(lt).q)) ? '<span class="mk">' + esc(markText(LT.get(lt)).replace('you marked it ', 'you: ')) + '</span>' : '')
+    + '</span>';
+}
+function escapeBlock(c, e, ix) {
+  const pin = c.cuts.length && c.cuts[c.cuts.length - 1] === e ? ' pin' : '';
+  const r = e.esc, txt = textOf(e, 'prompt'), ck = clock(e.t);
+  const deep = e.depth != null ? (e.exhausted ? '≥' : '') + plural(e.depth, 'assistant message')
+    + (e.tools != null ? ' and ' + (e.exhausted ? '≥' : '') + plural(e.tools, 'tool call') : '') : '';
+  const words = txt ? '<div class="quote">“' + esc(trunc(txt, 190)) + '”</div>'
+    : '<div class="noquote">What you said is not kept: this chat is not opted in to text.</div>';
+  if (r.kind === 'Correction') {
+    const lt = ltId('intervention', [e]);
+    return '<div class="turn" data-t="' + ix + '"><div class="full"><div class="cut' + pin + '" tabindex="0" data-cut="' + e.t + '" data-lt="' + esc(lt) + '" '
+      + tipAttr('A Correction: you pressed escape, and what you said next objected to what it was doing.',
+        ck + ' · intervention ' + f2(r.p) + ', over the 0.50 line · ' + (deep || 'depth not recorded') + keysHint(LT.get(lt)))
+      + '><div class="rule"></div><span class="node"></span><div class="cuttext"><div class="lab">Correction · ' + ck
+      + (deep ? ' · ' + deep + ' into the turn' : '')
+      + (labelOf(e, 'intervention') ? '<span class="mk">you: ' + WORD[labelOf(e, 'intervention').label] + '</span>' : '')
+      + '</div>' + words + '</div></div></div></div>';
+  }
+  const nudge = r.kind === 'Nudge';
+  return '<div class="turn" data-t="' + ix + '"><div class="full"><div class="nudge' + (nudge ? '' : ' unjudged') + '" '
+    + tipAttr(nudge ? 'A Nudge: you pressed escape to jump the queue, and what you said next carried on rather than objected.'
+                    : 'An escape that was not judged, so it counts as neither a Correction nor a Nudge.',
+      ck + ' · ' + (nudge ? 'intervention ' + f2(r.p) + ', under 0.50' : 'no answer' + (e.err ? ': ' + e.err : '')) + (deep ? ' · ' + deep : ''))
+    + '><div class="rule"></div><div class="lab">' + (nudge ? 'Nudge' : 'Escape, not judged') + ' · ' + ck + (deep ? ' · ' + deep + ' in' : '')
+    + '</div>' + (txt ? '<div class="quote">“' + esc(trunc(txt, 190)) + '”</div>' : '') + '</div></div></div>';
+}
+function renderConv(force) {
+  const c = BYID[sel];
+  if (!c) {
+    convKey = '';
+    $('#convtitle').textContent = 'Conversation'; $('#convmeta').textContent = '';
+    scroll.innerHTML = '<div class="empty">' + (S.loaded ? 'No conversation to show: no chat has fired a hook today.' : 'Reading the log.') + '</div>';
+    return;
+  }
+  const tv = c.turns, lastT = tv[tv.length - 1];
+  const key = [c.id, c.day.length, c.all.length, S.labels.length, c.state, lastT && lastT.live ? 'L' : 'E', c.turns.length].join('|');
+  if (key === convKey && !force) { updateLive(c); return; }
+  convKey = key;
+  $('#convtitle').textContent = 'Conversation — ' + c.name;
+  let h = '<div class="convbody" style="position:relative"><div class="spine"></div>';
+  let prevEnd = null, skipMe = false;
+  tv.forEach((t, ix) => {
+    const R = t.bash, stop = t.stop;
+    if (prevEnd !== null && t.t0 - prevEnd > 120e3)
+      h += '<div class="turn" data-t="' + ix + '"><div class="full"><div class="gap">' + dur(t.t0 - prevEnd) + ' quiet</div></div></div>';
+    if (t.kind === 'owner' && t.open.esc && t.open.esc.hit) { h += escapeBlock(c, t.open, ix); skipMe = true; }
+    let meCell = '', meMark = '';
+    if (t.kind === 'owner' && !skipMe) {
+      const e = t.open, r = e.esc || escOf(e), txt = textOf(e, 'prompt');
+      meMark = ' me';
+      meCell = '<div class="mecell"><div class="me" ' + tipAttr(
+          'Your message at ' + clock(t.t0) + ' opened a turn that ran ' + dur(t.tEnd - t.t0) + '.',
+          clock(t.t0) + ' · ' + (r.known ? 'no escape before it' : 'escape unknown: ' + WHY[r.why])
+            + (e.depth != null ? ' · the run before it: ' + (e.exhausted ? '≥' : '') + plural(e.depth, 'assistant message') : '')
+            + (ans(e, 'sharp_turn') != null ? ' · sharp turn ' + f2(ans(e, 'sharp_turn')) + ', a marker, not an alarm' : ''))
+        + '><div class="who">You<span>' + hhmm(t.t0) + '</span>' + (r.known ? '' : '<span>escape —</span>') + '</div>'
+        + (txt ? '<div class="txt">' + esc(trunc(txt, 230)) + '</div>' : '') + '</div></div>';
+    }
+    skipMe = false;
+    const chips = [];
+    if (t.risky.length) chips.push(sig(ltId('risky', t.risky), 'About to break something ×' + t.risky.length,
+      'About to break something: ' + plural(t.risky.length, 'command') + ' in this turn ' + (t.risky.length === 1 ? 'is' : 'are') + ' hard to undo.',
+      t.risky.slice(0, 3).map(e => clock(e.t) + ' ' + f2(ans(e, 'risky')) + (textOf(e, 'command') ? ' ' + trunc(textOf(e, 'command'), 40) : '')).join(' · ')));
+    if (stop) {
+      const jp = ans(stop, 'jumped'), wr = ans(stop, 'wrong_room');
+      if (jp != null && jp >= FIRE) chips.push(sig(ltId('jumped', [stop]), EARNED[0].n + ' ' + f2(jp),
+        EARNED[0].n + ': ' + EARNED[0].means + '.',
+        'judge ' + f2(jp) + ' on this turn, over the 0.50 line · fires on ' + EARNED[0].corr + '% of corrections and ' + EARNED[0].clean + '% of matched clean turns'));
+      if (wr != null && wr >= FIRE) chips.push(sig(ltId('wrong_room', [stop]), EARNED[1].n,
+        EARNED[1].n + ': ' + EARNED[1].means + '.',
+        (stop.whyRoom || 'paths written against paths named') + ' · a rule, not a judge answer'));
+      const no = ans(stop, 'needs_owner'), cd = ans(stop, 'claims_done');
+      if (no != null && no >= FIRE) chips.push('<span class="sig q" ' + tipAttr('It stopped on a question: a free fact, not a class.',
+        'needs_owner ' + f2(no) + ' on a v1 line, which asked a judge for what v2 reads') + '>Wants you</span>');
+      if (cd != null && cd >= FIRE) chips.push('<span class="sig q" ' + tipAttr('It said it was done: a free fact, not a class.',
+        'claims_done ' + f2(cd) + ' on a v1 line · whether the claim was backed is the class, and no judge has earned it') + '>Says done</span>');
+    }
+    const span = t.tEnd - t.t0, tiny = span < 5000 && !R.length && t.subs > 0;
+    const exh = stop && stop.exhausted ? '≥' : '';
+    const counts = stop && stop.tools != null ? exh + plural(stop.tools, 'tool call') : plural(R.length, 'Bash call');
+    const depth = stop && stop.depth != null ? exh + plural(stop.depth, 'message') : '';
+    let tail = '';
+    if (t.live) tail = '<span class="run">running</span>';
+    else if (!stop && t.endedBy && !(t.endedBy.esc && t.endedBy.esc.hit))
+      tail = '<span>' + (t.endedBy.esc && t.endedBy.esc.known && t.endedBy.t - t.tEnd < IDLE ? 'you sent the next one before it stopped' : 'no stop recorded') + '</span>';
+    else if (!stop && !t.endedBy) tail = '<span>no stop recorded</span>';
+    const body = !t.live && stop ? textOf(stop, 'reply') : '';
+    const label = t.kind === 'resume' ? (R.length === 0 && t.subs ? 'Background agent' : 'Agent, already running') : 'Agent';
+    h += '<div class="turn" data-t="' + ix + '"><span class="mark' + meMark + '"></span>' + meCell + '<div class="agcell">'
+      + '<div class="agbox' + (t.live ? ' live' : '') + '" data-t0="' + t.t0 + '" ' + tipAttr(
+        'An agent turn in ' + c.name + ' that ' + (t.live ? 'has been running for ' : 'ran for ') + dur(span) + '.',
+        clock(t.t0) + ' → ' + (t.live ? 'now' : clock(t.tEnd)) + ' · ' + plural(R.length, 'Bash call') + ' logged'
+          + (stop && stop.tools != null ? ', ' + counts + ' in the transcript' : '') + (depth ? ', ' + depth : '')
+          + (t.subs ? ', ' + plural(t.subs, 'subagent return') : '') + (t.errs ? ' · ' + t.errs + ' not judged' : '')
+          + (exh ? ' · the tail ran out, so the counts are lower bounds' : '')) + '>'
+      + '<div class="agmeta"><span>' + label + '</span>'
+      + (tiny ? '<span>returned at ' + clock(t.tEnd) + '</span>'
+        : '<span class="ext" data-ext style="width:' + extent(span).toFixed(0) + 'px"></span><span data-el>' + dur(span) + '</span>'
+          + '<span data-tc>' + counts + '</span>' + (depth ? '<span>' + depth + '</span>' : ''))
+      + (t.subs ? '<span>' + plural(t.subs, 'subagent') + '</span>' : '')
+      + (t.errs ? '<span>' + t.errs + ' not judged</span>' : '') + tail + '</div>'
+      + (body ? '<div class="agtxt">' + esc(trunc(body, 140)) + '</div>' : '')
+      + (chips.length ? '<div class="sigs">' + chips.join('') + '</div>' : '')
+      + '</div></div></div>';
+    prevEnd = t.tEnd;
+  });
+  if (!tv.length) h += '<div class="empty">No turn today.</div>';
+  h += '</div>';
+  scroll.innerHTML = h;
+  const shown = fitConv(tv.length), n = tv.length;
+  $('#convmeta').textContent = 'you on the left, the agent on the right · ' + plural(n, 'turn') + ' since ' + hhmm(c.first)
+    + (shown < n ? ', the last ' + shown + ' below' : '') + ' · ' + known(c.K, c.U) + ' Correction' + (c.K === 1 ? '' : 's')
+    + (c.U ? ', escapes read on ' + (c.prompts.length - c.U) + ' of ' + c.prompts.length + ' prompts' : '')
+    + (c.words ? '' : ' · your words are not kept for this chat');
+}
+function updateLive(c) {
+  if (scroll.scrollHeight > scroll.clientHeight + 1) { renderConv(true); return; }
+  const box = scroll.querySelector('.agbox.live'); if (!box) return;
+  const e = NOW - (+box.getAttribute('data-t0'));
+  const el = box.querySelector('[data-el]'), ex = box.querySelector('[data-ext]');
+  if (el) el.textContent = dur(e); if (ex) ex.style.width = extent(e).toFixed(0) + 'px';
+}
+/* FIX 3. A Correction in the conversation sits on its own vertical: its node is where the Pulse's time
+   for it crosses the rule, and the selected chat's hairline runs through it from the Pulse to the strip.
+   Older than the window, the node moves to the axis's left edge, the same place the Pulse marks it. */
+function xAt(t, pr) { return pr.left + GUT + (t - (NOW - WIN)) / WIN * (pr.width - GUT - MR); }
+function placeCuts() {
+  const pr = $('#pulse').getBoundingClientRect(), mr = $('#main').getBoundingClientRect(), qr = $('#params').getBoundingClientRect();
+  document.querySelectorAll('#scroll [data-cut]').forEach(el => {
+    const er = el.getBoundingClientRect(); if (!er.width) return;
+    const t = +el.getAttribute('data-cut'), inWin = t >= NOW - WIN;
+    const x = (inWin ? xAt(t, pr) : pr.left + GUT) - er.left;
+    const node = el.querySelector('.node'), tx = el.querySelector('.cuttext');
+    node.style.left = x.toFixed(1) + 'px'; node.classList.toggle('edge', !inWin);
+    if (inWin && x > er.width / 2) { tx.style.textAlign = 'right'; tx.style.paddingLeft = '0'; tx.style.paddingRight = Math.max(0, er.width - x + 12).toFixed(0) + 'px'; }
+    else { tx.style.textAlign = 'left'; tx.style.paddingRight = '0'; tx.style.paddingLeft = Math.max(0, x + 12).toFixed(0) + 'px'; }
+  });
+  const c = BYID[sel]; let h = '';
+  if (c && pulseReady && pr.width) {
+    const top = pr.bottom - 20 - mr.top, bot = qr.top - mr.top;
+    c.cuts.filter(e => e.t >= NOW - WIN).forEach(e => {
+      h += '<i style="left:' + (xAt(e.t, pr) - mr.left - .5).toFixed(1) + 'px;top:' + top.toFixed(1) + 'px;height:' + Math.max(0, bot - top).toFixed(1) + 'px"></i>';
+    });
+  }
+  $('#vlines').innerHTML = h;
+}
+
+/* ---------- parameters ----------
+   The per-event numbers the log holds, on the Pulse's own x. Every mark is one reading of one event;
+   nothing is carried across a gap. v2 asks jumped and intervention; v1 never did, and a lane says so. */
+const PLANES = [
+  {n: 'About to break something', src: 'every Bash call', q: 'risky', hit: e => e.k === 'tool', v2only: false,
+   what: 'a hook question over the command before it runs', none: 'no Bash call judged here today'},
+  {n: 'Acting, not answering', src: 'every stop, v2', q: 'jumped', hit: e => e.k === 'stop', v2only: true,
+   what: 'the one conduct question that survived the matched control', none: 'no stop judged here today'},
+  {n: 'Correction or Nudge', src: 'every escape · 1 is a Correction', q: 'intervention', hit: e => e.k === 'user', v2only: true,
+   what: 'the register of what you said after an escape: 1.0 objects, 0.0 carries on',
+   none: c => c.X ? plural(c.X, 'escape') + ' here today, none judged'
+     : c.U ? 'no escape read here today, and ' + plural(c.U, 'prompt') + ' could not be read' : 'no escape here today'}
+];
+function renderParams() {
+  const c = BYID[sel], host = $('#params');
+  const W = host.clientWidth, H = host.clientHeight;
+  if (W < 40 || H < 40) return;
+  if (!c) {
+    host.innerHTML = '<div class="empty" style="padding-left:' + GUT + 'px">Nothing to plot: no chat has fired a hook today.</div>';
+    $('#paramtitle').textContent = 'Parameters'; $('#parammeta').textContent = '';
+    return;
+  }
+  const X0 = GUT, X1 = W - MR, t0 = NOW - WIN, xOf = t => X0 + (t - t0) / WIN * (X1 - X0);
+  const TOP = 17, lh = (H - TOP - 4) / PLANES.length;
+  let g = '';
+  const d = new Date(t0); d.setSeconds(0, 0);
+  if (d.getTime() < t0) d.setMinutes(d.getMinutes() + 1);
+  d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5);  /* the Pulse's local five-minute gridlines */
+  for (let k = d.getTime(); k <= NOW; k += 300000)
+    g += '<line x1="' + xOf(k).toFixed(1) + '" y1="0" x2="' + xOf(k).toFixed(1) + '" y2="' + H + '" stroke="#EBE8DF" stroke-width="1"/>';
+  PLANES.forEach((L, i) => {
+    const top = TOP + i * lh, base = top + lh - 14, span = lh - 22;
+    const yOf = v => base - Math.max(0, Math.min(1, v)) * span;
+    const all = c.day.filter(e => L.hit(e) && ans(e, L.q) != null && e.t <= NOW);
+    const win = all.filter(e => e.t >= t0);
+    g += '<line x1="' + X0 + '" y1="' + base.toFixed(1) + '" x2="' + X1 + '" y2="' + base.toFixed(1) + '" stroke="#E5E3DC" stroke-width="1"/>'
+      + '<line x1="' + X0 + '" y1="' + yOf(.5).toFixed(1) + '" x2="' + X1 + '" y2="' + yOf(.5).toFixed(1)
+      + '" stroke="rgba(107,107,104,.30)" stroke-width="1" stroke-dasharray="2 4"/>'
+      + '<text x="' + (GUT - 10) + '" y="' + (base - 4).toFixed(1) + '" text-anchor="end" font-family="' + SANS + '" font-size="10" fill="#6B6B68">' + esc(L.n) + '</text>'
+      + '<text x="' + (GUT - 10) + '" y="' + (base + 7).toFixed(1) + '" text-anchor="end" font-family="' + MONO + '" font-size="9" fill="rgba(107,107,104,.8)">' + esc(L.src) + '</text>';
+    if (win.length) {
+      let dd = '';
+      win.forEach((e, k) => {
+        const v = ans(e, L.q), x = xOf(e.t), y = yOf(v);
+        g += '<line x1="' + x.toFixed(1) + '" y1="' + base.toFixed(1) + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1)
+          + '" stroke="' + (v >= FIRE ? 'rgba(166,71,43,.45)' : 'rgba(20,20,19,.20)') + '" stroke-width="1"/>';
+        dd += (k ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+      });
+      if (win.length > 1) g += '<path d="' + dd + '" fill="none" stroke="rgba(20,20,19,.32)" stroke-width="1"/>';
+      win.forEach(e => {
+        const v = ans(e, L.q);
+        g += '<circle cx="' + xOf(e.t).toFixed(1) + '" cy="' + yOf(v).toFixed(1) + '" r="' + (v >= FIRE ? 3.2 : 2.2)
+          + '" fill="' + (v >= FIRE ? 'rgba(166,71,43,.88)' : 'rgba(20,20,19,.48)') + '"/>';
+      });
+      const hi = Math.max.apply(null, win.map(e => ans(e, L.q)));
+      const busyLeft = win.some(e => xOf(e.t) < X0 + 150 && ans(e, L.q) >= .55);
+      g += '<text x="' + (busyLeft ? X1 : X0 + 6) + '" y="' + (top + 10).toFixed(1) + '" text-anchor="' + (busyLeft ? 'end' : 'start')
+        + '" font-family="' + MONO + '" font-size="10" fill="' + (hi >= FIRE ? 'rgba(166,71,43,.74)' : '#6B6B68') + '">highest ' + hi.toFixed(2) + '</text>';
+    } else {
+      const neverAsked = L.v2only && !c.day.some(e => L.hit(e) && e.v !== 1) && c.day.some(e => L.hit(e));
+      g += '<text x="' + (X0 + 6) + '" y="' + (top + 10).toFixed(1) + '" font-family="' + SANS + '" font-size="10" fill="rgba(107,107,104,.75)">'
+        + esc(all.length ? 'nothing to read in these twenty minutes, the last was at ' + hhmm(all[all.length - 1].t)
+          : neverAsked ? 'only v1 lines here, and v1 never asked this' : typeof L.none === 'function' ? L.none(c) : L.none) + '</text>';
+    }
+    const fired = all.filter(e => ans(e, L.q) >= FIRE).length;
+    g += '<rect x="' + X0 + '" y="' + top.toFixed(1) + '" width="' + (X1 - X0) + '" height="' + lh.toFixed(1) + '" fill="transparent" '
+      + tipAttr(L.n + ' is ' + L.what + ', and every stem is one reading at the moment it happened.',
+        plural(all.length, 'reading') + ' in ' + c.name + ' today, ' + fired + ' over 0.50 · ' + win.length + ' in these twenty minutes') + '></rect>';
+  });
+  c.day.filter(e => e.t >= t0 && (e.k === 'user' || e.k === 'stop')).forEach(e => {
+    if (e.k === 'user' && e.esc && e.esc.kind === 'Correction') return;
+    g += '<line x1="' + xOf(e.t).toFixed(1) + '" y1="2" x2="' + xOf(e.t).toFixed(1) + '" y2="12" stroke="'
+      + (e.k === 'user' ? '#D97757" stroke-width="2' : 'rgba(20,20,19,.55)" stroke-width="1.4') + '"/>';
+  });
+  c.cuts.forEach(e => {
+    const inWin = e.t >= t0, x = inWin ? xOf(e.t) : X0;
+    const q = textOf(e, 'prompt');
+    const tip = tipAttr('A Correction in ' + c.name + ', and everything right of this rule happened after you made it.',
+      clock(e.t) + ' · intervention ' + f2(e.esc.p) + (q ? ' · “' + trunc(q, 70) + '”' : ''));
+    if (inWin) g += '<line x1="' + x.toFixed(1) + '" y1="0" x2="' + x.toFixed(1) + '" y2="' + H + '" stroke="#A6472B" stroke-width="3"/>'
+      + '<text x="' + (x - 6).toFixed(1) + '" y="10" text-anchor="end" font-family="' + SANS + '" font-size="9.5" fill="#A6472B">Correction ' + hhmm(e.t) + '</text>'
+      + '<rect x="' + (x - 7).toFixed(1) + '" y="0" width="14" height="' + H + '" fill="transparent" ' + tip + '></rect>';
+  });
+  const older = c.cuts.filter(e => e.t < t0);
+  if (older.length) {
+    const lb = older[older.length - 1];
+    const lab = '‹ ' + (older.length === 1 ? 'Correction ' + hhmm(lb.t) : older.length + ' Corrections, last ' + hhmm(lb.t));
+    g += '<rect x="' + (X0 + 3) + '" y="0" width="' + (lab.length * 5.6 + 6).toFixed(0) + '" height="13" fill="#FAF9F5"/>'
+      + '<line x1="' + (X0 + 1.5) + '" y1="0" x2="' + (X0 + 1.5) + '" y2="13" stroke="#A6472B" stroke-width="3"/>'
+      + '<text x="' + (X0 + 6) + '" y="10" font-family="' + SANS + '" font-size="9.5" fill="#A6472B">' + lab + '</text>';
+  }
+  host.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '">' + g + '</svg>';
+  $('#paramtitle').textContent = 'Parameters — ' + c.name;
+  $('#parammeta').textContent = 'the same twenty minutes as the Pulse, on the same axis · every reading 0 to 1, the dashes are 0.50, where a signal fires';
+}
+
+/* ---------- numbers ---------- */
+function renderNums() {
+  const c = BYID[sel];
+  if (!c) {
+    $('#statstitle').textContent = 'The same chat, counted';
+    $('#stats').innerHTML = '<div class="empty">No chat to count.</div>';
+  } else {
+    const P = c.prompts.length, R = P - c.U;
+    const whyTxt = Object.keys(c.why).map(k => c.why[k] + ' ' + WHY[k]).join(' · ');
+    const readM = c.U ? 'read on ' + R + ' of ' + plural(P, 'prompt') : 'of ' + plural(P, 'prompt') + ' since ' + hhmm(c.first);
+    const stats = [
+      [known(c.K, c.U), 'Correction' + (c.K === 1 ? '' : 's'), readM, c.K > 0 ? 'alert' : '',
+       'A Correction is an escape whose next message objects, the one label the system gets for free.',
+       (c.cuts.map(e => clock(e.t)).join(', ') || 'none found') + ' · escapes read on ' + R + ' of ' + P + ' prompts' + (c.U ? ' (' + whyTxt + ')' : '')],
+      [known(c.N, c.U), 'Nudge' + (c.N === 1 ? '' : 's'), c.X ? plural(c.X, 'escape') + ' not judged' : 'escapes that jumped the queue', '',
+       'A Nudge is an escape whose next message carries on, which is not a failure.',
+       c.N + ' Nudges, ' + c.K + ' Corrections, ' + c.X + ' not judged · over 90 days, 24 of 46 escapes were Nudges'],
+      [c.risky.length, 'Near miss' + (c.risky.length === 1 ? '' : 'es'), 'of ' + plural(c.bashJ.length, 'Bash call') + ' judged'
+        + (c.bash.length > c.bashJ.length ? ', ' + (c.bash.length - c.bashJ.length) + ' not' : ''), c.risky.length ? 'warn' : '',
+       'About to break something is a hook question over the command before it runs, not a conduct class.',
+       c.risky.length + ' fired of ' + c.bashJ.length + ' judged = ' + (c.bashJ.length ? Math.round(100 * c.risky.length / c.bashJ.length) : 0) + '%'],
+      [c.turns.length, 'Turn' + (c.turns.length === 1 ? '' : 's'), 'of ' + plural(c.day.length, 'event') + ', since ' + hhmm(c.first), '',
+       'A turn is one exchange: your message, then what the agent did until it stopped.',
+       c.turns.filter(t => t.kind === 'owner').length + ' opened by you · ' + plural(c.stops.length, 'stop') + ' · ' + plural(c.bash.length, 'Bash call')]
+    ];
+    $('#stats').innerHTML = stats.map(a => '<div class="stat" ' + tipAttr(a[4], a[5]) + '><div><span class="v' + (a[3] ? ' ' + a[3] : '') + '">'
+      + esc(a[0]) + '</span><span class="k">' + a[1] + '</span></div><div class="m">' + esc(a[2]) + '</div></div>').join('');
+    $('#statstitle').textContent = c.name + ', counted today · each number names its own window';
+  }
+  $('#earned').innerHTML = EARNED.map(cl => {
+    const J = c ? (cl.q === 'jumped' ? c.jumpJ : c.roomJ) : [], F = c ? (cl.q === 'jumped' ? c.jumpF : c.roomF) : [];
+    const here = !c ? 'no chat selected' : J.length ? F.length + ' of ' + plural(J.length, 'turn') + ' here today'
+      : c.stops.length && c.stops.every(e => e.v === 1) ? 'never asked on v1 lines' : 'not asked here today';
+    const marks = S.labels.filter(l => l.question === cl.q).length;
+    return '<div class="erow" ' + tipAttr(cl.n + ': ' + cl.means + '.',
+        'fires on ' + cl.corr + '% of ' + RUN.corrections + ' corrections and ' + cl.clean + '% of ' + RUN.matched
+        + ' matched clean turns = ' + cl.lift + ' · fires at 0.50 · ' + here + ' · ' + plural(marks, 'mark') + ' of yours')
+      + '><div class="e1"><span class="en">' + cl.n + '</span><span class="ekind">' + cl.kind + '</span><span class="elift">' + cl.lift + '</span></div>'
+      + '<div class="e2">' + cl.corr + '% of ' + RUN.corrections + ' corrections vs ' + cl.clean + '% of ' + RUN.matched
+      + ' matched clean turns · ' + here + '</div></div>';
+  }).join('');
+  const mj = S.labels.filter(l => l.question === 'jumped').length, mw = S.labels.filter(l => l.question === 'wrong_room').length;
+  $('#trust').innerHTML = '<span ' + tipAttr('Seven more questions are named in docs/signals.md and none survived the matched control, so none is on this board.',
+      NOT_EARNED.map(x => x[0] + ' ' + x[1]).join(' · ')) + '>Seven more questions, none earned. Neither may act until its curve tracks you: '
+    + mj + ' and ' + mw + ' of your marks so far, about 20 each needed.</span>';
+}
+
+/* ---------- tooltip ---------- */
+const tipEl = $('#tip'), scrimEl = $('#scrim'), leadEl = $('#leader'), leadLine = $('#leaderline'), leadDot = $('#leaderdot');
+let subEl = null, tipLT = null, mouse = {x: -1, y: -1};
+function dropSub() { if (subEl) { subEl.classList.remove('tipsub'); subEl.style.position = subEl.dataset.pos || ''; subEl.style.background = subEl.dataset.bg || ''; subEl = null; } }
+function opaque(bg) { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(bg); return bg !== 'transparent' && (!m || +m[1] === 1); }
+function groundOf(el) {
+  for (; el && el !== document.documentElement; el = el.parentElement) { const bg = getComputedStyle(el).backgroundColor; if (opaque(bg)) return bg; }
+  return 'var(--paper)';
+}
+function hideTip() { tipEl.style.opacity = 0; scrimEl.classList.remove('on'); leadEl.classList.remove('on'); dropSub(); tipLT = null; }
+function showTip(a, b, r, raise, lt) {
+  tipEl.children[0].textContent = a || ''; tipEl.children[1].textContent = b || '';
+  tipLT = lt || null;
+  const RAILR = document.querySelector('.rail').getBoundingClientRect().right;
+  const w = 286, h = tipEl.offsetHeight || 80, VW = window.innerWidth, VH = window.innerHeight;
+  const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const LEFT = RAILR + 12, RIGHT = VW - 8, BOT = VH - 8;
+  let x, y;
+  if (r.left < RAILR) { x = LEFT; y = cl(r.top - 2, 8, BOT - h); }
+  else if (r.right + 14 + w <= RIGHT) { x = r.right + 14; y = cl(r.top - 2, 8, BOT - h); }
+  else if (r.left - 14 - w >= LEFT) { x = r.left - w - 14; y = cl(r.top - 2, 8, BOT - h); }
+  else if (r.bottom + 12 + h <= BOT) { x = cl(r.left, LEFT, RIGHT - w); y = r.bottom + 12; }
+  else { x = cl(r.left, LEFT, RIGHT - w); y = cl(r.top - h - 12, 8, BOT - h); }
+  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px'; tipEl.style.opacity = 1;
+  if (raise !== subEl) {
+    dropSub(); subEl = raise; raise.classList.add('tipsub');
+    const cs = getComputedStyle(raise);
+    raise.dataset.pos = raise.style.position; raise.dataset.bg = raise.style.background;
+    if (cs.position === 'static') raise.style.position = 'relative';
+    if (!opaque(cs.backgroundColor)) raise.style.background = groundOf(raise.parentElement);
+  }
+  scrimEl.classList.add('on');
+  const pc = {x: x + w / 2, y: y + h / 2};
+  const sx = cl(pc.x, r.left + 2, r.right - 2), sy = cl(pc.y, r.top + 2, r.bottom - 2);
+  const px = cl(sx, x, x + w), pyy = cl(sy, y, y + h);
+  leadLine.setAttribute('d', 'M' + px.toFixed(1) + ' ' + pyy.toFixed(1) + 'L' + sx.toFixed(1) + ' ' + sy.toFixed(1));
+  leadDot.setAttribute('cx', sx.toFixed(1)); leadDot.setAttribute('cy', sy.toFixed(1));
+  leadEl.classList.add('on');
+}
+function tipFor(el) {
+  if (!el) { hideTip(); return; }
+  const a = el.getAttribute('data-tip').split('|');
+  const raise = el.ownerSVGElement ? el.ownerSVGElement.parentNode : el;
+  const lt = el.getAttribute('data-lt') ? LT.get(el.getAttribute('data-lt')) : null;
+  showTip(a[0], a[1], el.getBoundingClientRect(), raise, lt);
+}
+document.addEventListener('mousemove', ev => {
+  mouse = {x: ev.clientX, y: ev.clientY};
+  if (ev.target.closest && ev.target.closest('#pulse')) return;   /* the Pulse reports its own hover */
+  tipFor(ev.target.closest ? ev.target.closest('[data-tip]') : null);
+});
+document.addEventListener('focusin', ev => { const el = ev.target.closest && ev.target.closest('[data-tip]'); if (el) tipFor(el); });
+document.addEventListener('focusout', () => hideTip());
+
+/* ---------- one-key labels ---------- */
+async function mark(lt, key) {
+  const e = lt.evs.find(x => !labelOf(x, lt.q)) || lt.evs[lt.evs.length - 1];
+  const line2 = tipEl.children[1];
+  try {
+    const r = await fetch('/label', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({event_ts: e.ts, session_id: e.sid, question: lt.q, label: key})});
+    const body = await r.json();
+    if (!r.ok) throw new Error(body && body.error || String(r.status));
+    S.labels.push(body); indexLabels();
+    line2.textContent = line2.textContent.replace(/ · (not marked yet|you marked it \w+|you skipped it|\d+ of \d+ marked) · press.*$/, '') + keysHint(lt);
+    renderAll(true);
+    const el = document.elementFromPoint(mouse.x, mouse.y);
+    const again = el && el.closest && el.closest('[data-tip]');
+    if (again && !(el.closest('#pulse'))) tipFor(again);
+  } catch (err) {
+    line2.textContent += ' · the mark was not saved: ' + err.message;
+  }
+}
+document.addEventListener('keydown', ev => {
+  if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.repeat) return;
+  const k = ev.key.toLowerCase(); if (!WORD[k]) return;
+  const f = document.activeElement, lt = tipLT || (f && f.getAttribute && f.getAttribute('data-lt') ? LT.get(f.getAttribute('data-lt')) : null);
+  if (!lt) return;
+  ev.preventDefault(); mark(lt, k);
+});
+
+/* ---------- loop ---------- */
+let lastCap = 0;
+function setConvCap() {
+  const main = $('#main'), v = $('#verdict').getBoundingClientRect().height;
+  const cap = Math.round(main.getBoundingClientRect().height - 4 * 12 - bandH - 150 - v - PARAMS_MIN);
+  if (cap !== lastCap) { lastCap = cap; document.querySelector('.band.conv').style.maxHeight = Math.max(60, cap) + 'px'; convKey = ''; }
+}
+function renderHeader() {
+  $('#clock').textContent = clock(NOW);
+  const rate = $('#rate');
+  const date = new Date(NOW).toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short'});
+  if (S.failSince) { rate.textContent = date + ' · no answer from the server since ' + clock(S.failSince); rate.className = 'rate down'; }
+  else { rate.textContent = date + ' · live, read every 5 s'; rate.className = 'rate'; }
+}
+function renderAll(force) {
+  NOW = Date.now();
+  build();
+  renderHeader(); renderVerdict(); renderPulse(); setConvCap(); renderRail();
+  renderConv(force); renderParams(); renderNums(); placeCuts();
+}
+function tick() {
+  NOW = Date.now();
+  renderHeader();
+  if (CH.length) { renderRail(); slidePulse(); renderParams(); const c = BYID[sel]; if (c) updateLive(c); placeCuts(); }
+}
+renderKey();
+renderAll(true);
+poll();
+setInterval(tick, 1000);
+window.addEventListener('resize', () => { convKey = ''; renderAll(true); });
+</script>
+</body>
+</html>

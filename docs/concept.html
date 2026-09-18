@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overmind — one page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FAF9F5; --surface:#FFFFFF; --fill:#F0EEE6; --ink:#141413; --ink2:#6B6B68; --ink3:#9A968E;
+  --line:#E5E3DC; --coral:#D97757; --rust:#A6472B; --grey:#8C8880;
+  --serif:"Source Serif 4",Georgia,serif; --sans:Inter,-apple-system,system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased;padding:36px 16px 48px}
+.page{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+.block{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.k{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin-bottom:12px}
+h1{font:600 38px/1.05 var(--serif);letter-spacing:-.01em}
+.thesis{font:400 19px/1.35 var(--serif);color:var(--ink2);margin-top:8px;max-width:760px}
+.mono{font-family:var(--mono)}
+.span12{grid-column:span 12}.span8{grid-column:span 8}.span7{grid-column:span 7}.span6{grid-column:span 6}.span5{grid-column:span 5}.span4{grid-column:span 4}
+@media (max-width:900px){.span8,.span7,.span6,.span5,.span4{grid-column:span 12}}
+
+/* hero */
+.head{grid-column:span 12;display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;padding:0 4px 8px}
+.heros{display:flex;gap:28px}
+.hero .n{font:600 40px/1 var(--serif)}
+.hero .l{font-size:12px;color:var(--ink2);margin-top:4px;max-width:120px}
+.hero.alert .n{color:var(--rust)}
+.hero.dim .n{color:var(--ink3);text-decoration:line-through;text-decoration-thickness:2px}
+
+/* svg diagrams */
+svg text{font-family:var(--sans)}
+.box{fill:var(--surface);stroke:var(--line)}
+.boxf{fill:var(--fill);stroke:none}
+.t1{font:600 14px var(--sans);fill:var(--ink)}
+.t2{font:400 12px var(--sans);fill:var(--ink2)}
+.tm{font:500 11px var(--mono);fill:var(--ink2)}
+.ts{font:600 11.5px var(--sans);fill:var(--rust)}
+.arrow{stroke:var(--ink3);stroke-width:1.4;fill:none}
+.arrowr{stroke:var(--rust);stroke-width:1.6;fill:none}
+
+/* lists */
+.rows{display:grid;gap:9px}
+.row{display:grid;grid-template-columns:118px 1fr;gap:10px;align-items:baseline}
+.row b{font-weight:600}
+.row span{color:var(--ink2)}
+.tag{display:inline-block;font:500 10.5px/1 var(--mono);padding:3px 6px;border-radius:4px;background:var(--fill);color:var(--ink2);margin-left:6px;vertical-align:1px}
+.tag.r{background:#F4E4DE;color:var(--rust)}
+
+/* models */
+.models{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:900px){.models{grid-template-columns:1fr}}
+.model{border:1px solid var(--line);border-radius:8px;padding:14px 14px 12px;background:var(--paper)}
+.model h3{font:600 17px/1.2 var(--serif)}
+.model .who{font-size:12px;color:var(--ink2);margin:2px 0 10px}
+.spec{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.spec i{font:500 11px/1 var(--mono);font-style:normal;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.good,.bad{font-size:12.5px;padding-left:14px;position:relative;margin-top:3px}
+.good:before,.bad:before{position:absolute;left:0;font-weight:600}
+.good:before{content:"+";color:var(--ink)}
+.bad:before{content:"−";color:var(--rust)}
+
+/* signal test */
+.test{font:400 18px/1.35 var(--serif);border-left:3px solid var(--rust);padding:2px 0 2px 12px;margin-bottom:14px}
+.sig{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-top:1px solid var(--line);align-items:baseline}
+.sig:first-of-type{border-top:0}
+.sig .nm{font-weight:600}
+.sig .how{font-size:12px;color:var(--ink2)}
+.sig .ev{font:500 12px var(--mono);color:var(--rust);white-space:nowrap}
+.sig.p .nm{color:var(--ink2)} .sig.p .ev{color:var(--ink2)}
+.group{font:600 11px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:14px 0 4px}
+.nots{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.nots s{font:500 11.5px/1 var(--mono);color:var(--ink3);background:var(--fill);border-radius:4px;padding:5px 7px}
+
+/* escapes */
+.split{display:flex;height:34px;border-radius:5px;overflow:hidden;gap:2px;margin:10px 0 8px}
+.split div{display:flex;align-items:center;padding-left:10px;font:600 12px var(--sans);color:#fff}
+.split .nu{background:var(--grey)} .split .co{background:var(--rust)}
+.duel{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.duel>div{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.duel .n{font:600 28px/1 var(--serif)}
+.duel .l{font-size:12px;color:var(--ink2);margin-top:4px}
+.duel .win .n{color:var(--rust)}
+
+/* screen */
+.qs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:900px){.qs{grid-template-columns:1fr}}
+.q{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--paper)}
+.q .num{font:600 12px var(--mono);color:var(--rust)}
+.q h3{font:600 18px/1.2 var(--serif);margin:4px 0 8px}
+.q p{font-size:13px;color:var(--ink2)}
+.mini{margin-top:10px;display:grid;gap:4px;font:500 11.5px/1.3 var(--mono)}
+.mini div{display:flex;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:5px 8px}
+.mini .mv{border-left:3px solid var(--rust)}
+.mini .wk{color:var(--ink3)}
+.off{display:flex;gap:18px;margin-top:12px;font-size:12.5px;color:var(--ink2);flex-wrap:wrap}
+.off b{color:var(--ink);font-weight:600}
+
+/* limits */
+.lim{display:grid;gap:8px}
+.lim div{display:grid;grid-template-columns:54px 1fr;gap:10px;align-items:baseline;font-size:13px}
+.lim .v{font:600 15px var(--serif);color:var(--rust);text-align:right}
+.lim span{color:var(--ink2)}
+.foot{grid-column:span 12;font-size:12px;color:var(--ink3);padding:4px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEAD -->
+  <div class="head">
+    <div>
+      <h1>Overmind</h1>
+      <p class="thesis">Watch every agent so you only look when it matters — and learn what matters from the moments you stepped in.</p>
+    </div>
+    <div class="heros" title="Read from ~/.claude/sessions at 19:54, 18 Sep">
+      <div class="hero"><div class="n">17</div><div class="l">chats open right now</div></div>
+      <div class="hero"><div class="n">1</div><div class="l">working</div></div>
+      <div class="hero alert"><div class="n">16</div><div class="l">your move — the agent stopped</div></div>
+      <div class="hero dim"><div class="n">7</div><div class="l">what the old screen could see</div></div>
+    </div>
+  </div>
+
+  <!-- DIAGRAM 1: the whole system -->
+  <section class="block span12">
+    <div class="k">The whole system — sources, readers, objects, and the loop that teaches it</div>
+    <svg viewBox="0 0 1200 300" width="100%" role="img" aria-label="Three sources feed two readers, which produce chats, turns and signals for the screen; your escapes become labels that teach the judge.">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#9A968E"/></marker>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#A6472B"/></marker>
+      </defs>
+      <!-- column labels -->
+      <text class="tm" x="0" y="12">SOURCES · all free, on disk</text>
+      <text class="tm" x="330" y="12">READERS</text>
+      <text class="tm" x="618" y="12">OBJECTS</text>
+      <text class="tm" x="880" y="12">OUT</text>
+
+      <!-- sources -->
+      <rect class="box" x="0" y="26" width="240" height="64" rx="8"/>
+      <text class="t1" x="16" y="52">Session registry</text>
+      <text class="t2" x="16" y="72">every open chat · name · busy / idle</text>
+      <rect class="box" x="0" y="112" width="240" height="64" rx="8"/>
+      <text class="t1" x="16" y="138">Hooks</text>
+      <text class="t2" x="16" y="158">live events from every chat</text>
+      <rect class="box" x="0" y="198" width="240" height="64" rx="8"/>
+      <text class="t1" x="16" y="224">Transcripts</text>
+      <text class="t2" x="16" y="244">turns · your words · ⎋ escapes · titles</text>
+
+      <!-- readers -->
+      <rect class="boxf" x="330" y="46" width="200" height="78" rx="8"/>
+      <text class="t1" x="346" y="74">Rules</text>
+      <text class="t2" x="346" y="94">code · free · instant · exact</text>
+      <text class="tm" x="346" y="112">most of the work</text>
+      <rect class="boxf" x="330" y="160" width="200" height="78" rx="8"/>
+      <text class="t1" x="346" y="188">Jev</text>
+      <text class="t2" x="346" y="208">~1 s · yes/no + a probability</text>
+      <text class="tm" x="346" y="226">only what rules can't read</text>
+
+      <!-- source → reader -->
+      <path class="arrow" d="M240 58 C285 58 290 80 328 82" marker-end="url(#a)"/>
+      <path class="arrow" d="M240 144 C285 144 290 100 328 96" marker-end="url(#a)"/>
+      <path class="arrow" d="M240 144 C285 144 290 190 328 194" marker-end="url(#a)"/>
+      <path class="arrow" d="M240 230 C285 230 290 106 328 104" marker-end="url(#a)"/>
+      <path class="arrow" d="M240 230 C285 230 290 210 328 206" marker-end="url(#a)"/>
+
+      <!-- objects -->
+      <rect class="box" x="618" y="30" width="190" height="56" rx="8"/>
+      <text class="t1" x="634" y="54">Chat</text><text class="t2" x="634" y="72">name · whose move</text>
+      <rect class="box" x="618" y="116" width="190" height="56" rx="8"/>
+      <text class="t1" x="634" y="140">Turn</text><text class="t2" x="634" y="158">ask → work → how it ended</text>
+      <rect class="box" x="618" y="202" width="190" height="56" rx="8" stroke="#A6472B"/>
+      <text class="t1" x="634" y="226" fill="#A6472B">Signal</text><text class="t2" x="634" y="244">a few, earned, on a turn</text>
+
+      <path class="arrow" d="M530 85 L616 58" marker-end="url(#a)"/>
+      <path class="arrow" d="M530 85 L616 144" marker-end="url(#a)"/>
+      <path class="arrow" d="M530 90 L616 222" marker-end="url(#a)"/>
+      <path class="arrow" d="M530 199 L616 230" marker-end="url(#a)"/>
+
+      <!-- out -->
+      <rect class="box" x="880" y="30" width="320" height="100" rx="8"/>
+      <text class="t1" x="896" y="56">Screen</text>
+      <text class="t2" x="896" y="78">1 · Now — whose move is it?</text>
+      <text class="t2" x="896" y="98">2 · Back — where did I step in?</text>
+      <text class="tm" x="896" y="118">nothing else on the main view</text>
+      <path class="arrow" d="M808 58 L878 70" marker-end="url(#a)"/>
+      <path class="arrow" d="M808 144 L878 96" marker-end="url(#a)"/>
+      <path class="arrow" d="M808 228 L878 112" marker-end="url(#a)"/>
+
+      <!-- the loop -->
+      <rect class="box" x="880" y="168" width="320" height="94" rx="8" stroke="#A6472B"/>
+      <text class="ts" x="896" y="192">THE LOOP</text>
+      <text class="t2" x="896" y="212">⎋ your escapes → free labels → Trust curve</text>
+      <text class="t2" x="896" y="232">→ later: Overmind may speak up in a chat</text>
+      <text class="tm" x="896" y="252">only once a signal's curve tracks you</text>
+      <path class="arrowr" d="M808 230 L878 215" marker-end="url(#ar)"/>
+      <path class="arrowr" d="M1040 262 C1040 296 560 296 470 240" marker-end="url(#ar)"/>
+      <text class="ts" x="660" y="292">labels teach the judge</text>
+    </svg>
+  </section>
+
+  <!-- DIAGRAM 2: the turn -->
+  <section class="block span8">
+    <div class="k">The unit is a turn — and where each signal can fire</div>
+    <svg viewBox="0 0 780 240" width="100%" role="img" aria-label="You ask, the agent works, the turn ends done, asking you, or with you stopping it; signals attach at specific points.">
+      <defs>
+        <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#9A968E"/></marker>
+      </defs>
+      <!-- you ask -->
+      <circle cx="28" cy="130" r="9" fill="#D97757"/>
+      <text class="t1" x="10" y="160">You ask</text>
+      <text class="t2" x="10" y="176">your words</text>
+      <!-- work bar -->
+      <rect x="100" y="124" width="336" height="12" rx="6" fill="#E5E3DC"/>
+      <text class="t1" x="100" y="160">Agent works</text>
+      <text class="t2" x="100" y="176">reads · edits · commands · subagents</text>
+      <text class="tm" x="100" y="192">activity, not signal</text>
+      <!-- signals on the work -->
+      <path d="M214 118 l6 -6 l6 6 l-6 6z" fill="#A6472B"/>
+      <line x1="220" y1="106" x2="220" y2="72" stroke="#A6472B" stroke-dasharray="2 3"/>
+      <text class="ts" x="150" y="50">Touching the wrong thing</text>
+      <text class="tm" x="150" y="66">rule · edits outside the task</text>
+      <path d="M350 118 l6 -6 l6 6 l-6 6z" fill="#8C8880"/>
+      <line x1="356" y1="106" x2="356" y2="30" stroke="#8C8880" stroke-dasharray="2 3"/>
+      <text class="t1" x="300" y="22" style="fill:#6B6B68">About to break something</text>
+      <text class="tm" x="366" y="40">Jev · a gate, not a light</text>
+      <!-- end split -->
+      <line x1="436" y1="130" x2="470" y2="130" stroke="#9A968E" stroke-width="1.4"/>
+      <path class="arrow" d="M470 130 C492 130 492 74 518 74" marker-end="url(#b)"/>
+      <path class="arrow" d="M470 130 L518 130" marker-end="url(#b)"/>
+      <path class="arrow" d="M470 130 C492 130 492 190 518 190" marker-end="url(#b)"/>
+      <text class="t1" x="524" y="78">Done</text>
+      <text class="t1" x="524" y="134">Asks you</text>
+      <text class="t1" x="524" y="194" fill="#A6472B">⎋ You stop it</text>
+      <!-- your move bracket -->
+      <path d="M600 66 h10 v74 h-10" fill="none" stroke="#D97757" stroke-width="1.6"/>
+      <text class="t1" x="618" y="100" fill="#D97757">Your move</text>
+      <text class="tm" x="618" y="116">idle · free, exact</text>
+      <!-- acting not answering -->
+      <path d="M444 124 l6 -6 l6 6 l-6 6z" fill="#A6472B"/>
+      <line x1="450" y1="140" x2="450" y2="198" stroke="#A6472B" stroke-dasharray="2 3"/>
+      <text class="ts" x="444" y="214" text-anchor="end">Acting, not answering</text>
+      <text class="tm" x="444" y="230" text-anchor="end">Jev · at the stop</text>
+      <!-- escape outcomes -->
+      <path class="arrow" d="M630 190 C650 190 650 176 668 176" marker-end="url(#b)"/>
+      <path class="arrow" d="M630 190 C650 190 650 208 668 208" marker-end="url(#b)"/>
+      <text class="t2" x="674" y="180">Nudge · 52%</text>
+      <text class="ts" x="674" y="212">Correction · 48%</text>
+      <text class="tm" x="776" y="234" text-anchor="end">Jev reads your next words</text>
+    </svg>
+  </section>
+
+  <!-- OBJECTS -->
+  <section class="block span4">
+    <div class="k">Objects</div>
+    <div class="rows">
+      <div class="row"><b>You</b><span>one owner</span></div>
+      <div class="row"><b>Chat</b><span>an open session — name, project, busy / idle <span class="tag">registry</span></span></div>
+      <div class="row"><b>Turn</b><span>your message → its work → how it ended. <b style="color:var(--ink)">The unit.</b></span></div>
+      <div class="row"><b>Act</b><span>one tool call. Activity, never a signal.</span></div>
+      <div class="row"><b>Stop</b><span>done · asks you · you stop it</span></div>
+      <div class="row"><b>Escape ⎋</b><span>Nudge or Correction <span class="tag r">ground truth</span></span></div>
+      <div class="row"><b>Signal</b><span>a judgment on a turn that earned its place</span></div>
+    </div>
+  </section>
+
+  <!-- MODELS -->
+  <section class="block span12">
+    <div class="k">Models — three kinds of reader, each for what it's good at</div>
+    <div class="models">
+      <div class="model">
+        <h3>Rules</h3><div class="who">plain code</div>
+        <div class="spec"><i>free</i><i>0 ms</i><i>exact</i></div>
+        <div class="good">Reads what is literally there: idle status, paths touched, the ⎋ marker, titles</div>
+        <div class="bad">Can't read intent or tone</div>
+        <div class="good" style="margin-top:8px"><b>First choice, always.</b> If it can be read, it is never judged.</div>
+      </div>
+      <div class="model">
+        <h3>Jev</h3><div class="who">TypeSafe · System 1</div>
+        <div class="spec"><i>~1 s</i><i>~2¢ / day</i><i>p ∈ [0,1]</i></div>
+        <div class="good">Fast yes/no with a probability: "is he objecting?", "is it acting on a question?"</div>
+        <div class="bad">Reads literally · can't count · loses accuracy in clutter</div>
+        <div class="bad">A signal, never an authority — each question earns its place on your data</div>
+      </div>
+      <div class="model">
+        <h3>Claude</h3><div class="who">the agent · System 2</div>
+        <div class="spec"><i>the watched</i></div>
+        <div class="good">Does the work in every chat</div>
+        <div class="bad">Never grades itself — the watcher is a different model on purpose</div>
+        <div class="good" style="margin-top:8px">Phase 3: receives a short line from Overmind, once trust is earned</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SIGNAL VS NOT -->
+  <section class="block span5">
+    <div class="k">What is signal</div>
+    <p class="test">Would you do something different <i>right now</i> if you knew it?</p>
+    <div class="group">Signal</div>
+    <div class="sig"><div><div class="nm">Your move</div><div class="how">a chat stopped and is waiting · rule</div></div><div class="ev">exact</div></div>
+    <div class="sig"><div><div class="nm">Correction</div><div class="how">you stopped it because it was wrong · Jev</div></div><div class="ev">AUC 0.89</div></div>
+    <div class="sig"><div><div class="nm">Acting, not answering</div><div class="how">you asked; it did · Jev</div></div><div class="ev">+38 pp</div></div>
+    <div class="sig"><div><div class="nm">Touching the wrong thing</div><div class="how">outside the task · rule</div></div><div class="ev">+19 pp</div></div>
+    <div class="group">On probation</div>
+    <div class="sig p"><div><div class="nm">About to break something</div><div class="how">fires on 9% of commands — 52 today. A light that's always on is noise. Later: a gate at ≥ 0.9.</div></div><div class="ev">unproven</div></div>
+    <div class="group">Not signal — the agent breathing</div>
+    <div class="nots"><s>Bash calls</s><s>tool counts</s><s>events</s><s>turn counts</s><s>latency</s><s>cost</s><s>"escapes read on N of M"</s></div>
+  </section>
+
+  <!-- EVIDENCE CHART -->
+  <section class="block span4">
+    <div class="k">Which questions earned it</div>
+    <svg viewBox="0 0 380 300" width="100%" role="img" aria-label="Lift of nine questions on your corrections versus clean turns cut to the same depth.">
+      <!-- zero line at x=190, 1pp = 4px -->
+      <line x1="190" y1="8" x2="190" y2="262" stroke="#9A968E"/>
+      <g font-family="Inter,system-ui,sans-serif" font-size="11.5">
+        <!-- rows: y step 28, bar h 16 -->
+        <g><title>Acting, not answering: 58% of corrections vs 20% of matched clean turns</title>
+          <text x="0" y="22" fill="#141413" font-weight="600">Acting, not answering</text>
+          <rect x="190" y="11" width="152" height="16" rx="3" fill="#A6472B"/><text x="346" y="23" class="tm" style="fill:#A6472B">+38</text></g>
+        <g><title>Touching the wrong thing (rule): 21% vs 2%</title>
+          <text x="0" y="50" fill="#141413" font-weight="600">Touching the wrong thing</text>
+          <rect x="190" y="39" width="76" height="16" rx="3" fill="#A6472B"/><text x="270" y="51" class="tm" style="fill:#A6472B">+19</text></g>
+        <g><title>Missing the point: +11, but fired on 0 of its 3 real cases</title>
+          <text x="0" y="78" fill="#6B6B68">Missing the point</text>
+          <rect x="190" y="67" width="44" height="16" rx="3" fill="#8C8880"/><text x="238" y="79" class="tm">+11*</text></g>
+        <g><title>Doing too much: +10</title>
+          <text x="0" y="106" fill="#6B6B68">Doing too much</text>
+          <rect x="190" y="95" width="40" height="16" rx="3" fill="#8C8880"/><text x="234" y="107" class="tm">+10</text></g>
+        <g><title>Talking too much: 0, no threshold helped</title>
+          <text x="0" y="134" fill="#6B6B68">Talking too much</text>
+          <rect x="189" y="123" width="2" height="16" fill="#8C8880"/><text x="196" y="135" class="tm">0</text></g>
+        <g><title>Claiming without proof: none of your 19 corrections were about this — no ground truth</title>
+          <text x="0" y="162" fill="#6B6B68">Claiming without proof</text>
+          <rect x="174" y="151" width="16" height="16" rx="3" fill="#8C8880"/><text x="196" y="163" class="tm">−4 †</text></g>
+        <g><title>Gone dark: its +59 in round 1 was turn length</title>
+          <text x="0" y="190" fill="#6B6B68">Gone dark</text>
+          <rect x="166" y="179" width="24" height="16" rx="3" fill="#8C8880"/><text x="196" y="191" class="tm">−6</text></g>
+        <g><title>Going in circles: −7</title>
+          <text x="0" y="218" fill="#6B6B68">Going in circles</text>
+          <rect x="162" y="207" width="28" height="16" rx="3" fill="#8C8880"/><text x="196" y="219" class="tm">−7</text></g>
+        <g><title>Caving instead of thinking: fires more on good turns — an audience complaint, not yours</title>
+          <text x="0" y="246" fill="#6B6B68">Caving instead of thinking</text>
+          <rect x="146" y="235" width="44" height="16" rx="3" fill="#8C8880"/><text x="196" y="247" class="tm">−11</text></g>
+      </g>
+      <text class="tm" x="0" y="282">lift in pp · your 19 corrections vs 209 clean turns</text>
+      <text class="tm" x="0" y="296">cut to the same depth · * wrong turns · † no ground truth</text>
+    </svg>
+  </section>
+
+  <!-- ESCAPES -->
+  <section class="block span3" style="grid-column:span 3">
+    <div class="k">Your ⎋ key, 90 days</div>
+    <div style="font:600 36px/1 var(--serif)">46</div>
+    <div style="font-size:12px;color:var(--ink2);margin-top:4px">escapes in 24 of 101 chats</div>
+    <div class="split" title="24 Nudges, 22 Corrections">
+      <div class="nu" style="flex:24">24 Nudge</div>
+      <div class="co" style="flex:22">22 Correction</div>
+    </div>
+    <div style="font-size:12.5px;color:var(--ink2)">Half are push-to-talk. Escape alone is a coin flip — <b style="color:var(--ink)">what you say next</b> tells them apart.</div>
+    <div class="duel">
+      <div class="win"><div class="n">0.89</div><div class="l">Jev reading your next words</div></div>
+      <div><div class="n">0.64</div><div class="l">how deep into the turn</div></div>
+    </div>
+    <div style="font:500 11px var(--mono);color:var(--ink3);margin-top:8px">AUC · 0.5 = coin flip</div>
+  </section>
+
+  <!-- THE SCREEN, DERIVED -->
+  <section class="block span8">
+    <div class="k">The screen, derived — two questions, nothing else on the main view</div>
+    <div class="qs">
+      <div class="q">
+        <div class="num">1 · NOW</div>
+        <h3>Whose move is it?</h3>
+        <p>Every open chat by its real name. Your move first, freshest on top. Working chats stay quiet. A signal shows only when it fired.</p>
+        <div class="mini">
+          <div class="mv"><span>voice-command-functions</span><span>your move · 43 m</span></div>
+          <div class="mv"><span>coldgold-45</span><span>your move · 38 m</span></div>
+          <div class="wk"><span>overmind</span><span>working · 13 m</span></div>
+          <div class="wk"><span>+ 14 more, parked over an hour</span><span></span></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="num">2 · BACK</div>
+        <h3>Where did I step in?</h3>
+        <p>Open a chat: its turns, one line each — your words → what it did → how it ended. Your corrections in your own words.</p>
+        <div class="mini">
+          <div><span>"clean up the disk"</span><span>7 m · 4 edits · done</span></div>
+          <div class="mv"><span>⎋ "yo what takes so long?"</span><span>Correction</span></div>
+          <div><span>"drop caches"</span><span>40 s · asks you</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="off"><span><b>Trust</b> — is the judge right? its own tab</span><span><b>Plumbing</b> — one dot, green or not</span><span><b>Bash dots</b> — gone</span></div>
+  </section>
+
+  <!-- LIMITS -->
+  <section class="block span4">
+    <div class="k">Honest limits, today</div>
+    <div class="lim">
+      <div><span class="v">45%</span><span>of prompts the hook can't yet see an escape on — fix in flight</span></div>
+      <div><span class="v">19</span><span>labels so far; each signal needs ~20 before it may speak up</span></div>
+      <div><span class="v">?</span><span>"your move" can't tell a fresh finish from a parked chat — only by time</span></div>
+      <div><span class="v">5</span><span>junk lines in the log from my own timing test — to remove</span></div>
+    </div>
+  </section>
+
+  <div class="foot">Sources: ~/.claude/sessions (open chats), ~/.claude/projects (transcripts), Overmind event log · measurements in docs/signals.md and experiments/results · 18 Sep 2026</div>
+</div>
+</body>
+</html>

@@ -74,14 +74,29 @@ rule cannot read and Jev can. Every Correction is a labeled negative for free; e
 labeled non-event. This is what makes the calibration curve draw itself.
 
 **Live since #16.** On every `UserPromptSubmit` the hook reads the last 256 KB of the session
-transcript backwards to the owner's previous message — 96% of his 48 interruptions sit inside that
+transcript backwards to the owner's previous message — 96% of his 46 interruptions sit inside that
 window — and records `interrupted`, `depth` (assistant messages since he last spoke) and
 `tool_calls`, free, read and never judged. Only when `interrupted` is true does it pay for one
 question, `intervention`: **1.0 is a Correction, 0.0 a Nudge**, asked about the register of the
 message and nothing else. Depth sits beside the answer as a fact and is deliberately kept out of
 the state: a question able to read the length of what it judges will go on to measure the length,
-which is exactly what round 1 did. On the owner's own escapes it reads 0.09 for *"you can use
-quick haiku subagents…"* and 0.95 for *"Why the fuck you writing?"*.
+which is exactly what round 1 did.
+
+**And it is measured.** `experiments/intervention.py` scores that question, on the state the hook
+builds, against all 46 of his escapes and the hand tags of `research/own-transcripts.md` — 21
+Corrections, 24 Nudges:
+
+| | Corrections | Nudges | Separation |
+|---|---|---|---|
+| Fires (p ≥ 0.50) | 52% | 8% | **+44 pp** |
+| Mean p | 0.574 | 0.189 | **+0.386** |
+
+**AUC 0.89**, precision 85% — against **0.64** for `depth`, which is free, so the question earns
+its request instead of restating a fact already on the line. It reads *"please stop"* at 0.93 and
+*"Why the fuck you writing?"* at 0.96; every one of its misses is a Correction he made politely
+(*"ok, it's fine if you need a ton of subagents…"*, 0.29), which is the honest limit of asking
+about register. 0.50 is not the best cut on this data — 0.30 gives 80% accuracy — but thresholds
+are phase 2's to set from labels, so the sweep is on the record and the constant stays put.
 
 ---
 
@@ -233,7 +248,7 @@ Honesty about what the evidence killed matters as much as what it kept.
 | **Neutering the test** | Green because the test was neutered. *"If breaking the code doesn't turn the test red, there is no test."* | The diff plus the test run. |
 | **Caving instead of thinking** | It agreed with you instead of thinking. *"It's not a collaborator weighing my idea. It's a mirror with good manners."* | Your prompt, its reply, and what it did next. Many threads say this; **the owner has never once complained about it**. Build it for the audience, not for him. |
 | **Context rot** | Named four ways by Breunig and used industry-wide: poisoning, distraction, confusion, clash. | Compaction boundaries as events. Do not rename these; the vocabulary is already settled. |
-| **A guard that stopped firing** | A hook that silently stopped firing. *"the command ran, exit code 0, nothing happened."* | A last-fired timestamp per hook — trivial, and Overmind is itself a hook, so it should hold itself to it. |
+| **A guard that stopped firing** | A hook that silently stopped firing. *"the command ran, exit code 0, nothing happened."* | A last-fired timestamp per hook — trivial, and Overmind is itself a hook, so it should hold itself to it. Held to it for its own reading since #16: `tail_error` and `tail_exhausted` say when a line's facts are missing rather than clean. |
 
 ## How it all connects
 

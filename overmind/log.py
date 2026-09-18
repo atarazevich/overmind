@@ -4,9 +4,9 @@ Runtime dir: ~/Library/Application Support/Overmind (override with OVERMIND_HOME
 
 **v2 (2026-09-18, #16).** Lines carry the facts read from the payload and the transcript tail
 beside the answers: `interrupted` / `depth` / `tool_calls` on UserPromptSubmit, `depth` /
-`tool_calls` on Stop, `tail_error` when the tail failed. `state_source` moved out of this module
-into those facts, because it now says "payload" or "payload+tail" per event rather than one
-constant. A line with no `model` is a line no Jev request was made for — the facts alone.
+`tool_calls` on Stop, `tail_error` when the tail failed, `tail_exhausted` when it ran out of
+window before the owner's previous message, `wrong_room_why` when that rule fired. A line with no
+`model` is a line no Jev request was made for — the facts and the free rules alone.
 v1 lines stay exactly as written and the dashboard reads both: it keys on `answers` and `ts`,
 which neither version moved.
 """
@@ -55,11 +55,13 @@ def event_line(model: str, ms: int, input_tokens: int | None, answers: dict[str,
             "input_tokens": input_tokens}
 
 
-def error_line(event: str, session_id: str, error: str, facts: dict | None = None) -> dict:
-    """What is known when something threw. The facts ride along: a transcript tail that already
-    said the owner interrupted is not worth losing to a failed network call."""
+def error_line(event: str, session_id: str, error: str, facts: dict | None = None,
+               answers: dict[str, float] | None = None) -> dict:
+    """What is known when something threw. The facts and the rules' own verdicts ride along: a
+    transcript tail that already said the owner interrupted, and a rule that already said the turn
+    wrote in another room, are not worth losing to a failed network call — both were free."""
     return {"ts": now(), "v": V, "event": event, "session_id": session_id, **(facts or {}),
-            "error": error}
+            "answers": answers or {}, "error": error}
 
 
 def label_line(event_ts: str, session_id: str, question: str, prob: float, label: str) -> dict:

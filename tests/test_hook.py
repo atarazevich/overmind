@@ -119,7 +119,7 @@ class InProcess(IsolatedHome):
         line = self.run_main(mock.Mock(return_value=answered), body)[0]
         self.assertEqual((line["interrupted"], line["depth"], line["tool_calls"]), (True, 2, 1))
         self.assertEqual(line["answers"], {"intervention": 0.934})
-        self.assertEqual((line["v"], line["state_source"]), (2, "payload+tail"))
+        self.assertEqual(line["v"], 2)
 
     def test_success_line(self) -> None:
         lines = self.run_main(mock.Mock(return_value=CANNED))
@@ -129,7 +129,19 @@ class InProcess(IsolatedHome):
     def test_network_failure_becomes_error_line_that_keeps_its_facts(self) -> None:
         lines = self.run_main(mock.Mock(side_effect=urllib.error.URLError("timed out")))
         self.assertEqual(lines[0]["error"], "URLError")
-        self.assertEqual((lines[0]["event"], lines[0]["state_source"]), ("PreToolUse", "payload"))
+        self.assertEqual((lines[0]["event"], lines[0]["answers"]), ("PreToolUse", {}))
+
+    def test_a_failed_call_still_keeps_the_verdict_the_rule_gave_for_free(self) -> None:
+        """`wrong_room` costs nothing and was already decided; the network is not its problem."""
+        judge.remember_prompt(payload("stop")["session_id"], "why is the history view stale?")
+        turn = [rec("assistant", TS, text("Let me fix it.")),
+                rec("assistant", TS, tool("Write", file_path=os.path.expanduser("~/Projects/cmux/x.go")))]
+        body = json.dumps(dict(payload("stop"),
+                               transcript_path=transcript_file(self.tmp.name, turn, "stop.jsonl")))
+        line = self.run_main(mock.Mock(side_effect=urllib.error.URLError("timed out")), body)[0]
+        self.assertEqual((line["error"], line["answers"]), ("URLError", {"wrong_room": 1.0}))
+        self.assertEqual(line["depth"], 2, "and the facts it had already read")
+        self.assertIn("Projects/cmux", line["wrong_room_why"])
 
     def test_bad_response_becomes_error_line(self) -> None:
         lines = self.run_main(mock.Mock(return_value={"unexpected": True}))

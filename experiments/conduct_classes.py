@@ -54,8 +54,8 @@ FIRE = 0.5  # a class "fires" at or above this probability. Named, so it can be 
 SATURATED = 0.60  # firing on this share of uninterrupted turns is firing on everything
 
 MAX_OWNER_CHARS = 1200  # the owner's preceding message in the round-1 state, clipped middle-out
-MAX_ASKED_CHARS = 2000  # the same message in the round-2 state, where it is the thing judged
-MAX_REPLY_CHARS = 2500  # the agent's prose for the whole turn, clipped middle-out
+MAX_ASKED_CHARS = judge.MAX_TEXT  # the same message in the round-2 state, where it is judged
+MAX_REPLY_CHARS = judge.MAX_REPLY  # the agent's prose for the whole turn, clipped middle-out
 MAX_TOOLS_LISTED = judge.MAX_TOOLS_LISTED  # tool calls shown to Jev; the count stays exact
 MAX_TARGET_CHARS = judge.MAX_TARGET  # one tool call's target (path, command, url)
 MAX_QUOTE_CHARS = 400  # owner_next_message stored on an interrupted turn
@@ -71,8 +71,8 @@ YAP_RATIO = 4.0  # ... and it must also be this many times the length of what he
 # ---------------------------------------------------------------------------- the classes
 
 # Key note: docs/signals.md names the repetition signal `stuck`; issue #14 and this experiment
-# call it `spinning`. Same class, and `stuck` is already taken in judge.STOP by the Stop-event
-# question. The alias is carried into the output so the dashboard can reconcile the two names.
+# call it `spinning`. Same class, two names, and the alias is carried into the output so the
+# dashboard can reconcile them on the runs already stored.
 KEY_ALIASES = {"spinning": "stuck"}
 
 # Every instruction is a flat statement about what is present in the state. Jev reads literally
@@ -213,8 +213,6 @@ NOT_MEASURABLE = {
 
 # Touching the wrong thing lives in overmind/rules.py: it survived this experiment and now
 # runs in the live hook, so there is one implementation and both callers score the same rule.
-WRITE_TOOLS, MUTATING_BASH = rules.WRITE_TOOLS, rules.MUTATING_BASH
-HOME = rules.HOME
 
 # A claim, the words that state it, and the calls that would have produced it. The reply says it;
 # `tool_calls` either shows it or does not. Only the residue — a vaguer claim with no clean
@@ -369,7 +367,7 @@ CONTROL = ["2113e956", "0f83b22c"]
 
 # Reading a transcript lives in overmind/transcript.py: the hook reads the same records from
 # the same markers, and a second reading of a transcript in this repo would be one too many.
-MARKER, blocks, record_text = transcript.MARKER, transcript.blocks, transcript.record_text
+blocks, record_text = transcript.blocks, transcript.record_text
 slash_name, human_text = transcript.slash_name, transcript.human_text
 is_interruption = transcript.is_interruption
 
@@ -443,23 +441,12 @@ def view_of(turn: Turn, depth: int = 0) -> dict:
     """
     steps = turn.steps[:depth] if depth else turn.steps
     calls = [c for s in steps for c in s["tools"]]
-    listed = calls
-    if len(calls) > MAX_TOOLS_LISTED:
-        half = MAX_TOOLS_LISTED // 2
-        listed = calls[:half] + calls[-half:]
-    seen: set[tuple[str, str]] = set()
-    repeats = 0
-    for call in calls:
-        key = (call["name"], call["target"])
-        if key in seen and call["target"]:
-            repeats += 1
-        seen.add(key)
     full = "\n\n".join(s["text"] for s in steps if s["text"])
     return {"depth": len(steps), "reply_full": full,
             "reply": judge.clip(full, MAX_REPLY_CHARS),
             "reply_chars": sum(s["chars"] for s in steps),
-            "tool_calls": listed, "tool_calls_all": calls, "tool_call_count": len(calls),
-            "repeated_calls": repeats}
+            "tool_calls": judge.elide(calls), "tool_calls_all": calls,
+            "tool_call_count": len(calls), "repeated_calls": judge.repeated_calls(calls)}
 
 
 def segment(path: str, session_prefix: str) -> dict:
@@ -500,8 +487,8 @@ def segment(path: str, session_prefix: str) -> dict:
                 continue
             try:
                 record = json.loads(line)
-            except ValueError:
-                continue
+            except (ValueError, RecursionError):
+                continue  # not JSON, or nested past what a parser will follow
             if not isinstance(record, dict) or record.get("type") not in ("user", "assistant"):
                 continue
             if record.get("isSidechain"):
@@ -572,12 +559,12 @@ def r1_state(view: dict, owner_request: str, cwd: str) -> dict:
 
 def r2_state(view: dict, owner_request: str, cwd: str) -> dict:
     """Round 2's state: his words first and at twice the budget, `cwd` dropped (no question in R2
-    reads it), and `repeated_calls` added as a free fact rather than an inference."""
-    return {"owner_asked": judge.clip(owner_request, MAX_ASKED_CHARS),
-            "reply": view["reply"],
-            "tool_calls": tool_lines(view),
-            "tool_call_count": view["tool_call_count"],
-            "repeated_calls": view["repeated_calls"]}
+    reads it), and `repeated_calls` added as a free fact rather than an inference.
+
+    It is `judge.stop_state` because the hook sends that same state to the same question: a number
+    measured here has to be carried by the state the live hook builds, not by a subset of it.
+    """
+    return judge.stop_state(owner_request, view["reply"], view["tool_calls_all"])
 
 
 def ask(state: dict, questions: dict, key: str, attempts: int = 3) -> tuple[dict, int, int]:

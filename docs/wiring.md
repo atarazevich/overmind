@@ -73,7 +73,7 @@ The entry, if it is still there, has the same shape as the Stop one. It writes n
 
 Start a new Claude Code session (settings are read at launch), do one turn, and watch: `~/Projects/overmind/overmind/tail.py 10`. A line per event with `answers` means it works; a line with `error` names the failing class; no line at all means the entry did not fire (check the event name and matcher). Add the next entry only after the previous one shows lines.
 
-A Stop or a UserPromptSubmit line with `"tail_error"` means the hook could not read that session's transcript: the answers it could still give are there, `depth` and `interrupted` are not. `"state_source":"payload+tail"` is the healthy case.
+A Stop or a UserPromptSubmit line with `"tail_error"` means the hook could not read that session's transcript: the answers it could still give are there, `depth` and `interrupted` are not. `"tail_exhausted":true` means it read the window and ran out of it before reaching your previous message — the counts on that line are lower bounds and `interrupted` is unknown, not false. Neither key present is the healthy case.
 
 ## Opt-in text for one session
 

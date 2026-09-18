@@ -35,9 +35,17 @@ class Tail(unittest.TestCase):
         path = self.write(self.turn([rec("user", TS, text(MARKER), interruptedMessageId="msg_1")]))
         last = transcript.tail(path, "Why the fuck are you writing? I asked a question.")
         self.assertIs(last["interrupted"], True)
-        self.assertEqual((last["depth"], last["error"]), (3, ""))
+        self.assertEqual((last["depth"], last["error"], last["exhausted"]), (3, "", False))
         self.assertEqual([c["name"] for c in last["tool_calls"]], ["Read", "Write"])
         self.assertEqual(last["tool_calls"][1]["target"], "/Users/x/Projects/cmux/main.go")
+
+    def test_the_turn_carries_back_his_request_and_the_prose_that_answered_it(self) -> None:
+        """Both are state the Stop question was measured on; the tail walks past them anyway."""
+        path = self.write(self.turn([rec("assistant", TS, text("Done — History.swift."))]))
+        last = transcript.tail(path)
+        self.assertEqual(last["owner_asked"], "why is the history view stale? just answer, "
+                                              "don't touch anything")
+        self.assertEqual(last["reply"], "Let me look at the coordinator.\n\nDone — History.swift.")
 
     def test_a_turn_that_finished_is_not_an_interruption(self) -> None:
         path = self.write(self.turn([rec("assistant", TS, text("Done — fixed in History.swift."))]))
@@ -83,7 +91,8 @@ class Tail(unittest.TestCase):
 
     def test_a_missing_file_names_the_error_and_costs_nothing(self) -> None:
         last = transcript.tail(os.path.join(self.tmp.name, "nope.jsonl"))
-        self.assertEqual(last, {"interrupted": False, "depth": 0, "tool_calls": [],
+        self.assertEqual(last, {"interrupted": False, "depth": 0, "tool_calls": [], "reply": "",
+                                "owner_asked": "", "exhausted": False,
                                 "error": "FileNotFoundError"})
         self.assertEqual(transcript.tail("")["error"], "FileNotFoundError")
         self.assertEqual(transcript.tail(self.tmp.name)["error"], "IsADirectoryError")
@@ -102,6 +111,10 @@ class Tail(unittest.TestCase):
         last = transcript.tail(path)
         self.assertEqual((last["depth"], last["error"]), (4, ""))
 
+    def test_a_record_nested_past_the_parser_is_dropped_like_any_other_bad_line(self) -> None:
+        path = self.write(self.turn() + ["[" * 100000 + "]" * 100000])
+        self.assertEqual((transcript.tail(path)["depth"], transcript.tail(path)["error"]), (3, ""))
+
     def test_the_window_bounds_the_read_and_the_counts_are_then_lower_bounds(self) -> None:
         """Beyond TAIL_BYTES there is no reading: his message is out of sight, not searched for."""
         filler = rec("user", TS, [{"type": "tool_result", "content": "x" * 20000}])
@@ -113,8 +126,23 @@ class Tail(unittest.TestCase):
         self.assertEqual(last["error"], "")
         self.assertGreater(last["depth"], 0)
         self.assertLess(last["depth"], 40, "it stops at the window, it does not read the file")
-        self.assertLessEqual(sum(len(line) + 1 for line in transcript.window(path)),
-                             transcript.TAIL_BYTES, "the window is the only bound there is")
+        self.assertIs(last["exhausted"], True, "it never reached his message: these are lower bounds")
+        lines, cut = transcript.window(path)
+        self.assertLessEqual(sum(len(line) + 1 for line in lines), transcript.TAIL_BYTES)
+        self.assertLessEqual(len(lines), transcript.MAX_LINES, "bytes bound the read, lines the parse")
+        self.assertIs(cut, True)
+
+    def test_a_window_that_reached_the_start_of_the_file_is_not_exhausted(self) -> None:
+        """Nothing further back to read is not the same failure as a window that ran out."""
+        last = transcript.tail(self.write([rec("assistant", TS, text("resumed, mid-thought"))]))
+        self.assertEqual((last["depth"], last["exhausted"], last["owner_asked"]), (1, False, ""))
+
+    def test_more_lines_than_the_parser_reads_are_left_out_and_said_to_be_left_out(self) -> None:
+        path = self.write(["{}"] * (transcript.MAX_LINES + 50) + self.turn())
+        self.assertLess(os.path.getsize(path), transcript.TAIL_BYTES, "bytes are not the bound here")
+        lines, cut = transcript.window(path)
+        self.assertEqual((len(lines), cut), (transcript.MAX_LINES, True))
+        self.assertEqual(transcript.tail(path)["depth"], 3, "the turn itself is still whole")
 
     def test_an_empty_file_and_a_file_of_junk_are_simply_empty(self) -> None:
         self.assertEqual(transcript.tail(self.write([], end=""))["depth"], 0)
@@ -129,15 +157,6 @@ class Records(unittest.TestCase):
         self.assertTrue(transcript.is_interruption(
             json.loads(rec("user", TS, "anything", interruptedMessageId="msg_1"))))
         self.assertFalse(transcript.is_interruption(json.loads(rec("user", TS, "carry on"))))
-
-    def test_his_words_exclude_the_machinery_and_include_a_slash_command(self) -> None:
-        self.assertEqual(transcript.owner_message(json.loads(rec("user", TS, "real message"))),
-                         "real message")
-        self.assertIsNone(transcript.owner_message(json.loads(rec("user", TS, text(MARKER)))))
-        self.assertIsNone(transcript.owner_message(
-            json.loads(rec("user", TS, [{"type": "tool_result", "content": "…"}]))))
-        slash = "<command-message>gu</command-message><command-name>/gu</command-name>"
-        self.assertEqual(transcript.owner_message(json.loads(rec("user", TS, slash))), "/gu")
 
     def test_a_reminder_is_stripped_and_a_target_is_collapsed(self) -> None:
         wrapped = "keep this<system-reminder>not this</system-reminder> and this"

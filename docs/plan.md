@@ -9,7 +9,7 @@ Questions, second set (all Noul), after #14 and #15 scored the first one — see
 - PreToolUse Bash: risky (destructive or irreversible; complements cc-safety-net which blocks known patterns)
 - SubagentStop: nothing. Both of its questions were dropped, so the hook returns without writing.
 
-Twelve questions from the first set are gone, not deferred: `lost_you`, `too_much`, `yap`, `missed_point`, `spinning`, `caving`, `no_receipts`, `claims_done`, `needs_owner`, `drifting`, `sharp_turn`, `needs_parent_decision`. Lines carry `state_source`: "payload" or "payload+tail" once the transcript is read for a turn's tool calls.
+Twelve questions from the first set are gone, not deferred: `lost_you`, `too_much`, `yap`, `missed_point`, `spinning`, `caving`, `no_receipts`, `claims_done`, `needs_owner`, `drifting`, `sharp_turn`, `needs_parent_decision`. A line says what the transcript read could not give it: `tail_error` names a read that failed, `tail_exhausted` a window that ran out before the owner's previous message.
 
 ## Phase 2 — See and label
 Dashboard: now (live sessions, latest signals), timeline (signals per session over time), history (distributions; calibration curve once labels exist). One-key label on every fired signal. Done when the owner has labeled 200 signals and the reliability curve per question is on the page.

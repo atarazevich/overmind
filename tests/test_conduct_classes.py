@@ -11,6 +11,7 @@ import re
 import tempfile
 import unittest
 
+from overmind import rules
 from tests import rec, text, tool
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -222,7 +223,7 @@ class Matching(unittest.TestCase):
 class Rules(unittest.TestCase):
     """A deterministic detector is still a claim about the world, so it gets tests too."""
 
-    HOME = cc.HOME  # rooms are read relative to $HOME, so the test has to live there too
+    HOME = rules.HOME  # rooms are read relative to $HOME, so the test has to live there too
 
     def fire(self, rule, steps: list, request: str, cwd: str = "") -> bool:
         cwd = cwd or self.HOME + "/Projects/voice"

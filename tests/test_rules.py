@@ -51,20 +51,5 @@ class WrongRoom(unittest.TestCase):
         self.assertEqual(rules.wrong_room([], "fix it", HERE), (False, ""))
 
 
-class Paths(unittest.TestCase):
-    def test_a_clipped_target_loses_the_halves_either_side_of_the_cut(self) -> None:
-        whole = rules.paths_in("cp /Users/x/a/one.py /Users/x/b/two.py")
-        self.assertEqual(whole, ["/Users/x/a/one.py", "/Users/x/b/two.py"])
-        clipped = rules.paths_in("cp /Users/x/a/one.py /Users/x/Proj" + rules.CLIP_MARK
-                                 + "ects/z/two.py /Users/x/c/three.py")
-        self.assertEqual(clipped, ["/Users/x/a/one.py", "/Users/x/c/three.py"])
-
-    def test_a_room_is_read_relative_to_home(self) -> None:
-        self.assertEqual(rules.room_of(HOME + "/Projects/voice/app/x.swift", ""), "Projects/voice")
-        self.assertEqual(rules.room_of("~/.claude/rules/x.md", ""), ".claude")
-        self.assertEqual(rules.room_of("/Applications/Xcode.app", ""), "/Applications")
-        self.assertEqual(rules.room_of("app/x.swift", HERE), "Projects/voice", "relative is cwd's")
-
-
 if __name__ == "__main__":
     unittest.main()

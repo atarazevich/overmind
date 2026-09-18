@@ -42,7 +42,7 @@ def main() -> None:
             log.append(log.fact_line(job["facts"], job["answers"], **job["header"]))
             return
         if not os.environ.get(judge.KEY_ENV):
-            log.append(log.error_line(event, sid, "no_key", job["facts"]))
+            log.append(log.error_line(event, sid, "no_key", job["facts"], job["answers"]))
             return
         if detach():
             log.append(judge.run(job))
@@ -50,7 +50,9 @@ def main() -> None:
         try:
             from overmind import log
 
-            log.append(log.error_line(event, sid, type(exc).__name__, job["facts"] if job else None))
+            known = job or {}
+            log.append(log.error_line(event, sid, type(exc).__name__, known.get("facts"),
+                                      known.get("answers")))
         except Exception:  # noqa: BLE001
             pass
 

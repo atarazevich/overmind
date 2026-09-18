@@ -110,18 +110,19 @@ class Events(Endpoint):
               "answers": {"needs_owner": 0.91}, "state_source": "payload"}
         log.append(v1)
         log.append(log.event_line("jev-1.13.0", 800, 500, {"jumped": 0.4},
-                                  {"depth": 3, "tool_calls": 2, "state_source": "payload+tail"},
-                                  event="Stop", session_id="sid", cwd="demo"))
+                                  {"depth": 3, "tool_calls": 2}, event="Stop", session_id="sid",
+                                  cwd="demo"))
         self.assertEqual([x["v"] for x in self.call("GET", "/events")[1]], [1, 2])
         status, line = self.post_label(event_ts=TS % 0, session_id="sid",
                                        question="needs_owner", label="y")
         self.assertEqual((status, line["prob"]), (200, 0.91))
 
-    def test_text_passes_through_only_when_the_line_has_it(self) -> None:
+    def test_the_opted_in_state_passes_through_only_when_the_line_has_it(self) -> None:
+        state = {"command": "rm -rf build", "cwd": "demo"}
         log.append({"ts": TS % 0, "session_id": "a", "answers": {"risky": 0.9}})
-        log.append({"ts": TS % 1, "session_id": "b", "answers": {"risky": 0.9}, "text": "rm -rf build"})
+        log.append({"ts": TS % 1, "session_id": "b", "answers": {"risky": 0.9}, "state": state})
         lines = self.call("GET", "/events")[1]
-        self.assertEqual([x.get("text") for x in lines], [None, "rm -rf build"])
+        self.assertEqual([x.get("state") for x in lines], [None, state])
 
 
 class Sessions(Endpoint):

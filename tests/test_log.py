@@ -17,11 +17,11 @@ class Log(IsolatedHome):
         self.assertEqual(stat.S_IMODE(os.stat(log.events_path()).st_mode), 0o600)
 
     def test_event_line_shape(self) -> None:
-        facts = {"depth": 4, "tool_calls": 7, "state_source": "payload+tail"}
+        facts = {"depth": 4, "tool_calls": 7, "tail_exhausted": True}
         line = log.event_line("jev-1.13.0", 812, 689, {"jumped": 0.9}, facts,
                               event="Stop", session_id="sid", cwd="demo")
         self.assertEqual(list(line), ["ts", "v", "event", "session_id", "cwd", "depth", "tool_calls",
-                                      "state_source", "answers", "model", "ms", "input_tokens"])
+                                      "tail_exhausted", "answers", "model", "ms", "input_tokens"])
         self.assertEqual(line["v"], 2)
         self.assertTrue(line["ts"].endswith("+00:00") and len(line["ts"]) == 29)
         full = log.event_line("m", 1, 2, {}, None, event="PreToolUse", session_id="sid", cwd="demo",
@@ -36,12 +36,13 @@ class Log(IsolatedHome):
         self.assertEqual((line["answers"], line["interrupted"]), ({}, False))
         self.assertNotIn("model", line, "no model means no request was made")
 
-    def test_error_line_keeps_the_facts_it_already_read(self) -> None:
+    def test_error_line_keeps_the_facts_and_the_verdicts_it_already_had(self) -> None:
         self.assertEqual(set(log.error_line("Stop", "sid", "no_key")),
-                         {"ts", "v", "event", "session_id", "error"})
-        with_facts = log.error_line("UserPromptSubmit", "sid", "URLError", {"interrupted": True})
-        self.assertEqual(with_facts["interrupted"], True)
-        self.assertEqual(with_facts["error"], "URLError")
+                         {"ts", "v", "event", "session_id", "answers", "error"})
+        kept = log.error_line("Stop", "sid", "URLError", {"interrupted": True},
+                              {"wrong_room": 1.0})
+        self.assertEqual((kept["interrupted"], kept["error"]), (True, "URLError"))
+        self.assertEqual(kept["answers"], {"wrong_room": 1.0}, "a free verdict is not the call's")
 
     def test_read_since_and_limit(self) -> None:
         self.assertEqual(log.read(), [])

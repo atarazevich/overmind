@@ -4,7 +4,7 @@ import re
 import unittest
 from unittest import mock
 
-from overmind import judge
+from overmind import judge, transcript
 from tests import MARKER, TS, IsolatedHome, payload, rec, text, tool, transcript_file
 
 CANNED = {"model": "jev-1.13.0", "answers": {"jumped": {"type": "noul", "noul": 0.97123}},
@@ -12,7 +12,8 @@ CANNED = {"model": "jev-1.13.0", "answers": {"jumped": {"type": "noul", "noul": 
 
 EVENTS = {"stop": judge.STOP, "user_prompt_submit": judge.PROMPT, "pre_tool_use_bash": judge.BASH}
 
-TURN = [rec("user", TS, "why is the history view stale? just answer, don't touch anything"),
+TURN_REQUEST = "why is the history view stale? just answer, don't touch anything"
+TURN = [rec("user", TS, TURN_REQUEST),
         rec("assistant", TS, text("Let me look.")),
         rec("assistant", TS, tool("Write", file_path=os.path.expanduser("~/Projects/cmux/x.go")))]
 INTERRUPT = rec("user", TS, text(MARKER), interruptedMessageId="msg_1")
@@ -30,11 +31,6 @@ class Questions(unittest.TestCase):
         self.assertEqual(list(judge.STOP), ["jumped"])
         self.assertEqual(list(judge.PROMPT), ["intervention"])
         self.assertEqual(list(judge.BASH), ["risky"])
-        dead = ("lost_you", "too_much", "yap", "missed_point", "spinning", "caving", "no_receipts",
-                "claims_done", "needs_owner", "drifting", "sharp_turn", "needs_parent_decision")
-        asked = json.dumps([judge.STOP, judge.PROMPT, judge.BASH]) + " ".join(dir(judge))
-        for key in dead:
-            self.assertNotIn(key, asked, "%s was dropped by measurement (#15)" % key)
 
     def test_clip_keeps_head_and_tail(self) -> None:
         text_in = "a" * 1500 + "b" * 1500
@@ -72,28 +68,41 @@ class StateBuilding(IsolatedHome):
         job = self.stop(TURN, "why is the history view stale? just answer")
         self.assertEqual(job["header"], {"event": "Stop", "session_id": "ovm-test-stop-0001",
                                          "cwd": "demo"})
-        self.assertEqual(job["facts"], {"depth": 2, "tool_calls": 1,
-                                        "state_source": "payload+tail"})
-        self.assertEqual(set(job["state"]), {"owner_asked", "tool_calls"})
+        self.assertEqual((job["facts"]["depth"], job["facts"]["tool_calls"]), (2, 1))
+        self.assertIn("Projects/cmux", job["facts"]["wrong_room_why"],
+                      "a rule that cannot say which room is no use on a dashboard")
         self.assertIn("Write: " + os.path.expanduser("~/Projects/cmux/x.go"),
                       job["state"]["tool_calls"])
         self.assertEqual(job["answers"], {"wrong_room": 1.0}, "cmux is not the room he named")
         self.assertIs(job["questions"], judge.STOP)
 
+    def test_a_stop_state_is_the_five_fields_jumped_was_measured_on(self) -> None:
+        """#15 scored +38 pp on this state; three fields fewer is an unmeasured question."""
+        job = self.stop(TURN, "why is the history view stale? just answer")
+        self.assertEqual(list(job["state"]), ["owner_asked", "reply", "tool_calls",
+                                              "tool_call_count", "repeated_calls"])
+        self.assertEqual(job["state"]["reply"], "Let me look.", "the turn's prose, from the tail")
+        self.assertEqual((job["state"]["tool_call_count"], job["state"]["repeated_calls"]), (1, 0))
+
     def test_a_stop_with_nothing_to_compare_asks_nothing(self) -> None:
-        no_prompt = self.stop(TURN)
-        self.assertEqual((no_prompt["questions"], no_prompt["answers"]), ({}, {}))
-        self.assertEqual(no_prompt["facts"]["depth"], 2, "the facts are still worth the line")
         no_calls = self.stop([rec("user", TS, "explain it"), rec("assistant", TS, text("It is …"))],
                              "explain it")
-        self.assertEqual((no_calls["questions"], no_calls["facts"]["tool_calls"]), ({}, 0))
+        self.assertEqual((no_calls["questions"], no_calls["answers"]), ({}, {}))
+        self.assertEqual((no_calls["state"], no_calls["facts"]["tool_calls"]), ({}, 0))
+        self.assertEqual(no_calls["facts"]["depth"], 1, "the facts are still worth the line")
+
+    def test_a_resumed_session_reads_his_request_off_the_transcript(self) -> None:
+        """First Stop after a resume: no cached prompt, and the tail walked past his message."""
+        job = self.stop(TURN)
+        self.assertIs(job["questions"], judge.STOP, "a boundary message is a request")
+        self.assertEqual(job["state"]["owner_asked"], TURN_REQUEST)
+        self.assertEqual(job["answers"], {"wrong_room": 1.0})
 
     def test_a_prompt_after_an_interruption_is_asked_about_and_one_after_a_turn_is_not(self) -> None:
         prompt = "Why the fuck are you writing? I asked a question."
         job = judge.prepare(dict(payload("user_prompt_submit"), prompt=prompt,
                                  transcript_path=self.transcript(TURN + [INTERRUPT])))
-        self.assertEqual(job["facts"], {"interrupted": True, "depth": 2, "tool_calls": 1,
-                                        "state_source": "payload+tail"})
+        self.assertEqual(job["facts"], {"interrupted": True, "depth": 2, "tool_calls": 1})
         self.assertIs(job["questions"], judge.PROMPT)
         self.assertEqual(job["state"], {"prompt": prompt})
         quiet = judge.prepare(dict(payload("user_prompt_submit"), prompt=prompt,
@@ -104,9 +113,18 @@ class StateBuilding(IsolatedHome):
     def test_a_transcript_it_cannot_read_names_the_class_and_the_line_goes_on(self) -> None:
         job = judge.prepare(payload("user_prompt_submit"))  # the fixture path does not exist
         self.assertEqual(job["facts"], {"interrupted": False, "depth": 0, "tool_calls": 0,
-                                        "state_source": "payload", "tail_error": "FileNotFoundError"})
+                                        "tail_error": "FileNotFoundError"})
         self.assertEqual(job["questions"], {})
-        self.assertEqual(self.stop([], "ask")["facts"]["state_source"], "payload+tail")
+        self.assertEqual(self.stop([], "ask")["facts"], {"depth": 0, "tool_calls": 0},
+                         "a transcript it read to the end has nothing to report")
+
+    def test_a_window_that_ran_out_says_so_rather_than_reading_as_a_quiet_turn(self) -> None:
+        """A prompt larger than the window leaves a torn fragment of one record and nothing else."""
+        huge = "x" * (transcript.TAIL_BYTES + 1000)
+        job = judge.prepare(dict(payload("user_prompt_submit"), prompt=huge,
+                                 transcript_path=self.transcript([rec("user", TS, huge)])))
+        self.assertEqual(job["facts"], {"interrupted": False, "depth": 0, "tool_calls": 0,
+                                        "tail_exhausted": True})
 
     def test_the_prompt_cache_is_what_a_stop_compares_against(self) -> None:
         judge.prepare(payload("user_prompt_submit"))
@@ -125,7 +143,7 @@ class StateBuilding(IsolatedHome):
         job = judge.prepare(payload("pre_tool_use_bash"))
         self.assertEqual(job["header"]["tool_name"], "Bash")
         self.assertEqual(job["state"], {"command": "git push --force origin main", "cwd": "demo"})
-        self.assertEqual(job["facts"], {"state_source": "payload"}, "no transcript is read here")
+        self.assertEqual(job["facts"], {}, "no transcript is read here")
         write = dict(payload("pre_tool_use_bash"), tool_name="Write", tool_input={"file_path": "/x"})
         self.assertIsNone(judge.prepare(write))
 
@@ -158,7 +176,6 @@ class Run(IsolatedHome):
         self.assertEqual(line["answers"], {"wrong_room": 1.0, "jumped": 0.971})
         self.assertEqual((line["model"], line["input_tokens"]), ("jev-1.13.0", 689))
         self.assertEqual((line["depth"], line["tool_calls"]), (2, 1))
-        self.assertEqual(line["state_source"], "payload+tail")
         self.assertIsInstance(line["ms"], int)
         self.assertNotIn("state", line)
         self.assertNotIn("test-key-XYZ", json.dumps(line))

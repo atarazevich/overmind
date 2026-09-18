@@ -28,7 +28,10 @@ MUTATING_BASH = ("rm ", "rmdir ", "mv ", "cp ", "mkdir ", "touch ", "chmod ", "c
 # Writing here is scratch work, not a room anyone is protective of.
 NEUTRAL_ROOMS = ("/tmp", "/private", "/var", "/dev")
 
-CLIP_MARK = " … "  # what judge.clip leaves behind in the middle of a clipped target
+# The mark a middle-out clip leaves in the middle of a target: written by judge.clip, read by
+# paths_in below. It lives here, on the side that imports nothing from this package, because the
+# other arrangement is a judge ↔ rules import cycle for three characters.
+CLIP_MARK = " … "
 
 
 def room_of(path: str, cwd: str) -> str:

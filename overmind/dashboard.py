@@ -2,8 +2,8 @@
 
 Serves static/dashboard.html, vendored scripts under /vendor/, and JSON over events.jsonl, labels.jsonl
 and ~/.claude/sessions. The page does its own aggregation from /events + /labels. Read-only except
-POST /label, which appends to labels.jsonl. Event lines pass through as written: `text` appears only
-when the hook stored it for an opted-in session.
+POST /label, which appends to labels.jsonl. Event lines pass through as written: `state` — exactly
+what Jev was shown — appears only when the hook stored it for an opted-in session.
 """
 from __future__ import annotations
 
